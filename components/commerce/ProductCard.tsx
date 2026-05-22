@@ -1,0 +1,178 @@
+'use client'
+
+import { useState } from 'react'
+import Image from 'next/image'
+import { cn } from '@/lib/cn'
+import { type Product, formatPrice, BRAND_COLORS } from '@/lib/products'
+import { useCart } from '@/lib/cart'
+
+const BADGE_STYLES: Record<string, string> = {
+  New: 'bg-vault-gold/20 text-vault-gold border-vault-gold/30',
+  'Best Seller': 'bg-white/10 text-vault-cream border-white/20',
+  Sale: 'bg-red-900/40 text-red-300 border-red-700/40',
+  Limited: 'bg-purple-900/40 text-purple-300 border-purple-700/40',
+  Verified: 'bg-vault-scan/20 text-vault-scan border-vault-scan/30',
+}
+
+interface ProductCardProps {
+  product: Product
+  featured?: boolean
+}
+
+export default function ProductCard({ product, featured = false }: ProductCardProps) {
+  const [selectedSize, setSelectedSize] = useState<string | null>(null)
+  const [added, setAdded] = useState(false)
+  const { add } = useCart()
+
+  const brandColor = BRAND_COLORS[product.brand] ?? '#F2EDE4'
+  const displayPrice = product.salePrice ?? product.price
+
+  function handleAddToCart() {
+    if (!selectedSize) return
+    add({
+      id: `${product.id}-${selectedSize}`,
+      slug: product.slug,
+      name: product.name,
+      brand: product.brand,
+      price: displayPrice,
+      image: product.image,
+      size: selectedSize,
+    })
+    setAdded(true)
+    setTimeout(() => setAdded(false), 2000)
+  }
+
+  return (
+    <article
+      id={product.slug}
+      className={cn(
+        'group relative flex flex-col bg-vault-card border border-vault-border rounded overflow-hidden scroll-mt-24',
+        'transition-all duration-300 hover:border-vault-gold/30 hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
+        featured && 'lg:flex-row'
+      )}
+    >
+      {/* Image area */}
+      <div
+        className={cn(
+          'relative overflow-hidden bg-vault-surface',
+          featured ? 'lg:w-1/2 aspect-square' : 'aspect-[4/3]'
+        )}
+        style={{
+          background: `radial-gradient(ellipse at 50% 70%, ${brandColor}08 0%, #161412 80%)`,
+        }}
+      >
+        {/* Loading silhouette behind the real photo */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <svg
+            viewBox="0 0 200 120"
+            className="w-2/3 opacity-15"
+            fill="currentColor"
+            style={{ color: brandColor }}
+            aria-hidden="true"
+          >
+            <path d="M20 80 C20 80 30 45 60 40 C80 37 90 50 110 48 C135 46 155 38 170 42 C185 46 180 60 170 68 C160 76 140 78 120 80 C100 82 60 85 40 84 C30 83 20 82 20 80Z" />
+            <path d="M20 80 L180 80 L185 88 L15 90 Z" opacity="0.6" />
+          </svg>
+        </div>
+
+        {/* Real product photo */}
+        <Image
+          src={product.image}
+          alt={`${product.brand} ${product.name}`}
+          fill
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          className="object-contain p-4 transition-transform duration-300 group-hover:scale-105"
+        />
+
+        {/* Brand label */}
+        <div className="absolute top-3 left-3">
+          <span
+            className="text-[10px] tracking-[0.2em] uppercase font-medium"
+            style={{ color: brandColor, opacity: 0.7 }}
+          >
+            {product.brand}
+          </span>
+        </div>
+
+        {/* Badge */}
+        {product.badge && (
+          <div className="absolute top-3 right-3">
+            <span
+              className={cn(
+                'text-[9px] tracking-[0.15em] uppercase font-medium px-2 py-0.5 rounded border',
+                BADGE_STYLES[product.badge] ?? BADGE_STYLES.Verified
+              )}
+            >
+              {product.badge}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className={cn('flex flex-col gap-3 p-4', featured && 'lg:p-6 lg:justify-center')}>
+        <div>
+          <p className="text-[10px] tracking-[0.2em] uppercase text-vault-muted mb-1">
+            {product.brand} · {product.category}
+          </p>
+          <h3 className="text-sm font-medium text-vault-cream leading-tight">
+            {product.name}
+          </h3>
+        </div>
+
+        {/* Price */}
+        <div className="flex items-baseline gap-2">
+          <span className="text-base font-semibold text-vault-cream">
+            {formatPrice(displayPrice)}
+          </span>
+          {product.salePrice && (
+            <span className="text-sm text-vault-muted line-through">
+              {formatPrice(product.price)}
+            </span>
+          )}
+        </div>
+
+        {/* Size selector */}
+        <div>
+          <p className="text-[10px] tracking-[0.1em] uppercase text-vault-muted mb-2">
+            Size (EU)
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {product.sizes.map((size) => (
+              <button
+                key={size}
+                onClick={() => setSelectedSize(size)}
+                aria-label={`Size ${size}`}
+                aria-pressed={selectedSize === size}
+                className={cn(
+                  'h-7 min-w-[2rem] px-2 text-[11px] font-medium rounded border transition-all duration-150',
+                  selectedSize === size
+                    ? 'bg-vault-gold text-vault-black border-vault-gold'
+                    : 'bg-transparent text-vault-muted border-vault-border hover:border-vault-gold/50 hover:text-vault-cream'
+                )}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* CTA */}
+        <button
+          onClick={handleAddToCart}
+          disabled={!selectedSize}
+          className={cn(
+            'mt-1 h-10 w-full text-xs tracking-[0.15em] uppercase font-medium rounded border transition-all duration-200',
+            selectedSize
+              ? added
+                ? 'bg-vault-scan/20 text-vault-scan border-vault-scan/40'
+                : 'bg-vault-gold/10 text-vault-gold border-vault-gold/40 hover:bg-vault-gold hover:text-vault-black'
+              : 'bg-transparent text-vault-muted border-vault-border cursor-not-allowed opacity-50'
+          )}
+        >
+          {added ? '✓ Added to Cart' : selectedSize ? 'Add to Cart' : 'Select Size'}
+        </button>
+      </div>
+    </article>
+  )
+}

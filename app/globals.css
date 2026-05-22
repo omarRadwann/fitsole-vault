@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-vault-black: #0C0B0A;
+  --color-vault-navy: #0A0D14;
+  --color-vault-surface: #15140F;
+  --color-vault-card: #1D1A17;
+  --color-vault-border: #2A2620;
+  --color-vault-gold: #BFA06A;
+  --color-vault-gold-dim: #7A6440;
+  --color-vault-cream: #F2EDE4;
+  --color-vault-muted: #5A554D;
+  --color-vault-green: #35E0A1;
+  --color-vault-scan: #35E0A1;
+
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-display: var(--font-playfair), Georgia, serif;
+}
+
+/* Keep the reset in @layer base so Tailwind's (layered) padding/margin
+   utilities — px-*, py-*, p-*, mx-auto — still win. Unlayered, this reset
+   silently killed every spacing utility site-wide. */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+html {
+  background: #0C0B0A;
+  color: #F2EDE4;
+  scroll-behavior: smooth;
+  /* Offset in-page anchor jumps so the fixed h-16 header never covers the target. */
+  scroll-padding-top: 5rem;
+  -webkit-text-size-adjust: 100%;
+  overflow-x: clip;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 90% 50% at 50% 0%, rgba(10, 13, 20, 0.9), transparent 70%),
+    #0C0B0A;
+  color: #F2EDE4;
+  font-family: var(--font-sans);
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 3px;
+}
+::-webkit-scrollbar-track {
+  background: #0C0B0A;
+}
+::-webkit-scrollbar-thumb {
+  background: #3A3028;
+  border-radius: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid #BFA06A;
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Thin gold rule used under section headings and dividers. */
+.vault-gold-line {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, var(--color-vault-gold), rgba(191, 160, 106, 0));
+}
+
+/* Readability: soft radial scrim behind each scroll act's copy + text shadow,
+   so headlines/CTAs stay legible over the 3D without dimming the whole scene. */
+.vault-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 58% 52% at 50% 50%,
+    rgba(8, 7, 6, 0.62) 0%,
+    rgba(8, 7, 6, 0.28) 48%,
+    transparent 76%
+  );
+}
+
+.vault-copy {
+  position: relative;
+  text-shadow:
+    0 2px 30px rgba(0, 0, 0, 0.85),
+    0 1px 5px rgba(0, 0, 0, 0.65);
+}
