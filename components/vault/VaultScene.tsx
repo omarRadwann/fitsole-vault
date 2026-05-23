@@ -2,8 +2,9 @@
 
 import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Environment, Lightformer, MeshReflectorMaterial, useTexture } from '@react-three/drei'
-import { EffectComposer, Bloom, Vignette, SMAA } from '@react-three/postprocessing'
+import { Environment, Lightformer, useTexture } from '@react-three/drei'
+import { EffectComposer, Bloom, Vignette, ToneMapping } from '@react-three/postprocessing'
+import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS, SHELF_SNEAKERS } from '@/lib/assets'
@@ -130,8 +131,8 @@ const boxBoneMat = new THREE.MeshStandardMaterial({
 // cost (vs MeshReflectorMaterial, which re-rendered the whole scene each frame).
 const floorMat = new THREE.MeshStandardMaterial({
   color: '#0E0B08',
-  roughness: 0.32,
-  metalness: 0.72,
+  roughness: 0.22,
+  metalness: 0.9,
 })
 
 function CeilingStrips() {
@@ -269,11 +270,13 @@ function AuthenticityCounter() {
 
       {/* Floating verification card — premium physical object */}
       <group ref={cardRef} position={[0, 1.35, 0.2]} scale={1.5}>
-        {/* Soft backlight halo so the card always reads as a glowing focal
-            object, even on the low tier (no counter spot light there). */}
+        {/* Soft backlight halo so the card reads as a glowing focal object. At
+            2.6 under ACES tonemapping it glows warmly WITHOUT the white-blob
+            blowout (ACES rolls the highlight off), and it now does more of the
+            lifting since the IBL re-architecture cut the extra fill lights. */}
         <mesh position={[0, 0, -0.02]}>
           <planeGeometry args={[0.56, 0.42]} />
-          <meshStandardMaterial color="#1A1714" emissive="#FFE0B0" emissiveIntensity={2.8} toneMapped={false} />
+          <meshStandardMaterial color="#1A1714" emissive="#FFE0B0" emissiveIntensity={2.6} toneMapped={false} />
         </mesh>
         {/* Matte black base */}
         <mesh material={cardBaseMat}>
@@ -317,7 +320,8 @@ function HeroDisplay() {
 
   return (
     <group position={[0, 0, 0]}>
-      {/* Pedestal lighting: tight warm cone, cool rim, glowing ground halo. */}
+      {/* Pedestal lighting: one tight warm cone — the only real product light
+          needed now; IBL + the glowing ground halo fill the near side. */}
       <primitive object={spotTarget} position={[0, 1.28, 0]} />
       <spotLight
         position={[0, 3.7, 0.5]}
@@ -329,10 +333,6 @@ function HeroDisplay() {
         decay={2}
         color="#FFF6EC"
       />
-      {/* Cool rim light separates the product from the dark interior.
-          (Warm front fill removed — the scene key light + raised ambient + the
-          Environment keep the sneaker's near side lit, at one fewer light.) */}
-      <pointLight position={[0, 1.5, -1.3]} intensity={4.5} distance={3.5} decay={2} color="#7FA0D0" />
       {/* Glowing ground halo on the platform (blooms under the shoe) */}
       <mesh position={[0, 1.045, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.34, 0.5, 64]} />
@@ -437,7 +437,7 @@ function DoorFrame() {
 // The "New Drops" beat (0.50–0.65) framed an empty corridor centre. This is one
 // feature element, offset from the x≈0 camera path so it fills the frame: a
 // back-lit lightbox with a featured pair on a small lit plinth in front.
-function DropFeature({ highTier }: { highTier: boolean }) {
+function DropFeature() {
   return (
     <group position={[-1.6, 0, -5.2]}>
       {/* Tall dark housing */}
@@ -473,14 +473,12 @@ function DropFeature({ highTier }: { highTier: boolean }) {
           }
         />
       </group>
-      {/* Warm halo ring under the featured pair */}
+      {/* Warm halo ring under the featured pair — emissive bumped (1.1→1.6) now
+          that the dedicated feature point light is gone; IBL + halo carry it. */}
       <mesh position={[0, 0.375, 0.62]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.3, 0.42, 48]} />
-        <meshStandardMaterial color="#FFB366" emissive="#FFB366" emissiveIntensity={1.1} transparent opacity={0.85} side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#FFB366" emissive="#FFB366" emissiveIntensity={1.6} transparent opacity={0.9} side={THREE.DoubleSide} />
       </mesh>
-      {highTier && (
-        <pointLight position={[0.3, 1.7, 1.1]} intensity={4} color="#FFE0B8" distance={4} decay={2} />
-      )}
     </group>
   )
 }
@@ -489,16 +487,14 @@ function DropFeature({ highTier }: { highTier: boolean }) {
 // Free-standing illuminated brand totems. The corridor camera runs straight
 // down the centre (x≈0) with a narrow forward view, so wall signs (x≈±5) fall
 // outside frame — these sit near centre (x≈±1.5), alternating sides, facing the
-// camera (+z). Marks are emissive (readable on every tier); a soft wash light
-// per totem is added only on the high tier.
+// camera (+z). Marks are emissive + ACES-tonemapped so they read on their own —
+// the IBL + bloom carry the glow, no per-totem real-time light needed.
 function BrandTotem({
   position,
   tex,
-  highTier,
 }: {
   position: [number, number, number]
   tex: THREE.Texture
-  highTier: boolean
 }) {
   return (
     <group position={position}>
@@ -532,14 +528,11 @@ function BrandTotem({
           toneMapped={false}
         />
       </mesh>
-      {highTier && (
-        <pointLight position={[0, 1.4, 0.8]} intensity={2.4} color="#C9A36A" distance={3.2} decay={2} />
-      )}
     </group>
   )
 }
 
-function BrandCorridor({ highTier }: { highTier: boolean }) {
+function BrandCorridor() {
   const [nike, adidas, puma, on] = useTexture([
     withBase('/brand-logos/nike.png'),
     withBase('/brand-logos/adidas.png'),
@@ -550,10 +543,10 @@ function BrandCorridor({ highTier }: { highTier: boolean }) {
   for (const t of [nike, adidas, puma, on]) t.colorSpace = THREE.SRGBColorSpace
   return (
     <>
-      <BrandTotem position={[-1.5, 0, -10.0]} tex={nike} highTier={highTier} />
-      <BrandTotem position={[1.5, 0, -10.9]} tex={adidas} highTier={highTier} />
-      <BrandTotem position={[-1.5, 0, -11.8]} tex={puma} highTier={highTier} />
-      <BrandTotem position={[1.5, 0, -12.7]} tex={on} highTier={highTier} />
+      <BrandTotem position={[-1.5, 0, -10.0]} tex={nike} />
+      <BrandTotem position={[1.5, 0, -10.9]} tex={adidas} />
+      <BrandTotem position={[-1.5, 0, -11.8]} tex={puma} />
+      <BrandTotem position={[1.5, 0, -12.7]} tex={on} />
     </>
   )
 }
@@ -562,10 +555,11 @@ export type QualityTier = 'high' | 'low'
 
 interface VaultSceneProps {
   scrollProgress: React.MutableRefObject<number>
-  tier?: QualityTier
 }
 
-export default function VaultScene({ scrollProgress, tier = 'high' }: VaultSceneProps) {
+// The scene renders identically on both tiers (IBL + emissive + glossy floor);
+// the quality ladder lives in VaultCanvas as DPR scaling.
+export default function VaultScene({ scrollProgress }: VaultSceneProps) {
   const cameraTarget = useMemo(() => new THREE.Vector3(), [])
   const cameraPos = useMemo(() => new THREE.Vector3(), [])
   const lookTarget = useMemo(() => new THREE.Vector3(), [])
@@ -597,65 +591,50 @@ export default function VaultScene({ scrollProgress, tier = 'high' }: VaultScene
       {/* Fog */}
       <fog attach="fog" args={['#090806', 10, 35]} />
 
-      {/* Baked environment for warm metal/gold reflections (no CDN, baked once) */}
-      <Environment resolution={256} frames={1}>
+      {/* Baked image-based lighting — now the PRIMARY light source (the Awwwards
+          approach). Rendered ONCE into a cubemap (frames={1}), so it lights every
+          PBR surface AND feeds the glossy floor's reflections at ZERO per-frame
+          cost. resolution 512 = cleaner reflections; the back-corridor formers
+          keep the deep end (brands / membership) lit now that the real corridor
+          fill lights are gone. NEVER raise frames — that re-bakes every frame. */}
+      <Environment resolution={512} frames={1}>
         <Lightformer intensity={2.2} color="#FFB366" position={[0, 5, -4]} scale={[12, 1.5, 1]} />
         <Lightformer intensity={1.4} color="#FFF4E0" position={[0, 5, -9]} scale={[8, 1, 1]} />
         <Lightformer intensity={1} color="#6E8AB8" position={[0, 3, 13]} scale={[10, 4, 1]} />
         <Lightformer intensity={0.8} color="#BFA06A" form="ring" position={[0, 2, 1]} scale={2} />
+        {/* Back-corridor fills (brands ≈ z-10…-12, membership ≈ z-15) — pumped
+            up since they now light the deep end on their own (no real fill lights). */}
+        <Lightformer intensity={2.4} color="#FFB366" position={[0, 4, -12]} scale={[10, 1.5, 1]} />
+        <Lightformer intensity={1.8} color="#FF8C4A" position={[0, 2.5, -15]} scale={[8, 2, 1]} />
+        <Lightformer intensity={1.3} color="#C9A36A" form="ring" position={[0, 2, -11]} scale={3} />
       </Environment>
 
-      {/* Lighting — trimmed to the essentials for weak-GPU performance. The
-          baked Environment + emissive LED strips / amber / halo carry the
-          ambient mood, so a slightly higher ambient compensates for the cut fills. */}
-      <ambientLight intensity={0.2} />
-
-      {/* Cool moonlight rim on the storefront exterior (Cairo night) */}
+      {/* Lighting — Awwwards-style IBL-first. The baked <Environment> + the
+          emissive LED strips / amber / mint / brand marks carry the ambient mood
+          and the floor reflections, so only FOUR real-time point/spot lights
+          remain (the ones IBL can't fake: the product cone in HeroDisplay, the
+          entrance glow, one widened corridor accent, and the counter focal).
+          Identical on both tiers — now cheap enough that the quality ladder
+          scales only DPR + premium post, not lights. ambient + directional stay
+          (constant / no per-fragment attenuation = nearly free) for global fill. */}
+      <ambientLight intensity={0.34} />
       <directionalLight position={[3, 6, 14]} intensity={0.5} color="#6E8AB8" />
       {/* Warm amber glow leaking out through the glass door / entrance */}
       <pointLight position={[0, 2.3, 8]} intensity={9} color="#FFB366" distance={10} decay={2} />
-      {/* Key light on the hero display */}
-      <pointLight position={[0, 3.8, 1]} intensity={11} color="#FFF8F0" distance={8} decay={2} />
-      {/* Warm mid/back corridor accent (centred on the relocated counter z≈-8) */}
-      <pointLight position={[0, 2.2, -8.2]} intensity={3.4} color="#C9A36A" distance={10} decay={2} />
-      {/* Dedicated counter + verification-card focal glow — BOTH tiers, so the
-          authenticity centrepiece never goes dark on weak GPUs (the low tier). */}
+      {/* Warm mid/back corridor accent — distance widened (10→16) to reach the
+          deep corridor now that the end-of-store fill lights are gone. */}
+      <pointLight position={[0, 2.2, -8.2]} intensity={3.4} color="#C9A36A" distance={16} decay={2} />
+      {/* Dedicated counter + verification-card focal glow */}
       <pointLight position={[0, 1.85, -7.5]} intensity={9} color="#FFD9A6" distance={6} decay={2} />
 
-      {/* Extra warmth + depth on capable devices — the counter glow, the
-          end-of-store amber, and a soft ceiling wash that made it feel alive. */}
-      {tier === 'high' && (
-        <>
-          <pointLight position={[0, 2, -8]} intensity={3} color="#BFA06A" distance={5} decay={2} />
-          <pointLight position={[0, 2, -11]} intensity={3} color="#FF8C4A" distance={6} decay={2} />
-          <pointLight position={[0, 3, -4]} intensity={1.2} color="#FFF4E0" distance={8} decay={2} />
-        </>
-      )}
-
-      {/* Floor — capable devices get a real (low-res) reflective floor for the
-          premium mirrored look; weak devices get the cheap glossy material that
-          reflects only the baked Environment (no per-frame reflection pass). */}
-      {tier === 'high' ? (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -5]}>
-          <planeGeometry args={[12, 36]} />
-          <MeshReflectorMaterial
-            resolution={256}
-            blur={[200, 60]}
-            mixBlur={1}
-            mixStrength={1.4}
-            roughness={0.7}
-            depthScale={1}
-            minDepthThreshold={0.4}
-            maxDepthThreshold={1.2}
-            color="#0E0B08"
-            metalness={0.5}
-          />
-        </mesh>
-      ) : (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -5]} material={floorMat}>
-          <planeGeometry args={[12, 36]} />
-        </mesh>
-      )}
+      {/* Floor — a SINGLE glossy PBR floor on both tiers (floorMat: metalness
+          0.9 / roughness 0.22). It mirrors the baked Environment (warm
+          lightformers + emissive signs) for a luxury-showroom reflection WITHOUT
+          the per-frame full-scene re-render the old MeshReflectorMaterial forced
+          — that second render every frame on scroll was the main FPS killer. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -5]} material={floorMat}>
+        <planeGeometry args={[12, 36]} />
+      </mesh>
 
       {/* Left wall */}
       <mesh position={[-5.5, 2, -5]} rotation={[0, Math.PI / 2, 0]} material={wallMat}>
@@ -700,7 +679,7 @@ export default function VaultScene({ scrollProgress, tier = 'high' }: VaultScene
       <ShelfModule x={4.5} z={-9} idx={1} />
 
       {/* Drop-wall feature display (the "New Drops" focal element) */}
-      <DropFeature highTier={tier === 'high'} />
+      <DropFeature />
 
       {/* Authenticity counter */}
       <AuthenticityCounter />
@@ -710,28 +689,27 @@ export default function VaultScene({ scrollProgress, tier = 'high' }: VaultScene
       <ShoeboxStack position={[1.7, 0, -8.1]} />
 
       {/* Brand corridor — illuminated brand totems (Nike / Adidas / Puma / ON) */}
-      <BrandCorridor highTier={tier === 'high'} />
+      <BrandCorridor />
 
       {/* Subtle floor reflection stripe */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} material={goldMat}>
         <planeGeometry args={[0.02, 30]} />
       </mesh>
 
-      {/* Cinematic post: bloom on emissive LEDs/scan/gold + vignette focus.
-          multisampling={0} disables the composer's expensive MSAA (big GPU win
-          on integrated chips); a higher bloom threshold blooms only the truly
-          bright emissives, which is also a touch cheaper and cleaner. */}
+      {/* Cinematic post. The Canvas renders linear HDR (flat), bloom blooms only
+          the brightest emissives in HDR, then ToneMapping (ACES Filmic) maps the
+          frame to display ONCE at the end — giving every emissive + reflection a
+          filmic highlight rolloff (premium, and it tames blowouts gracefully
+          instead of clipping to white). Vignette focuses the frame. */}
       <EffectComposer multisampling={0}>
         <Bloom
           mipmapBlur
-          intensity={0.95}
-          luminanceThreshold={0.55}
+          intensity={0.7}
+          luminanceThreshold={0.75}
           luminanceSmoothing={0.32}
         />
         <Vignette offset={0.3} darkness={0.8} />
-        {/* Cheap post-process antialiasing — cleans jagged edges that show at
-            lower DPR, without the cost of MSAA (multisampling stays 0). */}
-        <SMAA />
+        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
       </EffectComposer>
     </>
   )
