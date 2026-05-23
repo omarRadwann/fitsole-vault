@@ -7,6 +7,27 @@
 
 ---
 
+## Update — corrections & what shipped (2026-05-24)
+
+After this cold audit, every finding was checked against the codebase **before** any change. Several "first-impression" calls were **wrong** and were deliberately NOT acted on — recorded here for honesty:
+
+- **"Nike mislabeled as adidas" (was 🔴) — incorrect.** The **adidas AE 1** is Anthony Edwards' real signature shoe (he is an adidas athlete); the catalog (`lib/products.ts`), SKU `JQ6135`, and image naming correctly say Adidas. The Nike swoosh I zoomed in on is on a **generic placeholder 3D model** (a Tripo GLB), not the product data. No change made.
+- **"Duplicate products" (was 🟠) — incorrect.** "Handball Spezial" vs "Handball Spezial Shoes" and "PUMA UP" vs "PUMA UP Trainers" are **different real colorways** (distinct SKUs / colorway codes). No change made.
+- **"Checkout loses the cart" (was 🔴) — by design.** The checkout deep-link to fitsole.shop is an intentional scope cap, not a bug. Shipped fix: an **honest relabel** ("Continue on fitsole.shop") instead of a fake checkout promise.
+- **"Blank search thumbnails" (was 🟡) — not reproducible.** Thumbnails load correctly on localhost; the live blank was a lazy-load/capture artifact. No change made.
+- **"nike search returns nothing"** is simply because there is genuinely **no Nike inventory** in the 12-item catalog, while the meta description aspirationally lists Nike. Left as a product/marketing decision.
+
+**Shipped to the live site** (commits `20311df` + `b0be366`, deployed to the `gh-pages` branch, verified live):
+
+1. **Nav-jump black void → fixed.** Removed global `scroll-behavior: smooth`, so nav/search jumps to sections below the 700vh vault land instantly instead of crawling the camera through ~5s of black.
+2. **Copy legibility → improved.** Dim body copy lifted to a readable cream; stronger scrim behind overlay text.
+3. **Overlay bleed → fixed.** The SCROLL cue and trust bar now fade out before the vault hands off to the flat shop.
+4. **Honest checkout copy** (above).
+
+**Deliberately not touched:** the 3D camera/scene logic (fragile; FPS is unmeasurable through automation tooling). **Still open / verify on real devices:** mobile rendering + touch-scroll, real FPS, and the green scan-beam grazing the authenticity headline (needs a 3D-side adjustment, not a CSS one).
+
+---
+
 ## 1) Verdict
 
 A genuinely promising shell that does **not yet deliver on "premium," and is broken as a store.** The serif-on-black art direction and the camera-dolly-through-a-vault concept are real assets — but the experience repeatedly blanks to **full black between scenes**, the sneaker models read **mid-tier, not photoreal**, and the whole emotional build-up collapses at the payoff: clicking **Checkout dumps you onto a totally different, loud red "60% OFF" storefront with an empty cart.** The single biggest problem is **commerce integrity** — a store whose entire pitch is "100% authentic" mislabels a Nike as adidas, returns nothing for a "nike" search, and loses the cart at checkout. Would it win Awwwards SOTD today? No — it'd be knocked out in round one on motion blackouts and a broken buying flow.
