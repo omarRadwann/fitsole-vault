@@ -33,8 +33,9 @@
 html {
   background: #0C0B0A;
   color: #F2EDE4;
-  scroll-behavior: smooth;
-  /* Offset in-page anchor jumps so the fixed h-16 header never covers the target. */
+  /* Instant (not smooth) in-page jumps. A smooth scroll to a #section below the
+     700vh vault animates the camera through the entire 3D walk first — ~5s of
+     dark frames before the target arrives. Auto jumps land immediately. */
   scroll-padding-top: 5rem;
   -webkit-text-size-adjust: 100%;
   overflow-x: clip;
@@ -97,10 +98,10 @@ body {
   inset: 0;
   pointer-events: none;
   background: radial-gradient(
-    ellipse 58% 52% at 50% 50%,
-    rgba(8, 7, 6, 0.62) 0%,
-    rgba(8, 7, 6, 0.28) 48%,
-    transparent 76%
+    ellipse 62% 56% at 50% 50%,
+    rgba(8, 7, 6, 0.74) 0%,
+    rgba(8, 7, 6, 0.42) 46%,
+    transparent 78%
   );
 }
 

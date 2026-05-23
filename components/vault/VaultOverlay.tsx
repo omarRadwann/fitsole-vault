@@ -24,7 +24,7 @@ const scenes: Scene[] = [
         <h1 className="font-display text-5xl sm:text-7xl lg:text-8xl font-semibold tracking-tight text-vault-cream leading-[0.95]">
           Egypt&apos;s<br />Sneaker Vault
         </h1>
-        <p className="text-sm text-vault-muted max-w-sm leading-relaxed">
+        <p className="text-sm text-vault-cream/70 max-w-sm leading-relaxed">
           Authentic heat, curated drops, and sneaker culture born in Cairo.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 mt-2">
@@ -54,7 +54,7 @@ const scenes: Scene[] = [
         <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
           Step Inside.
         </h2>
-        <p className="text-sm text-vault-muted max-w-sm leading-relaxed">
+        <p className="text-sm text-vault-cream/70 max-w-sm leading-relaxed">
           Every pair is authenticated. Every drop is real.
         </p>
       </div>
@@ -75,7 +75,7 @@ const scenes: Scene[] = [
         <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-[0.95]">
           {heroProduct.name}
         </h2>
-        <p className="text-sm text-vault-muted leading-relaxed">
+        <p className="text-sm text-vault-cream/70 leading-relaxed">
           The pair on the pedestal — authenticated, in stock, ready for Cairo.
         </p>
         <div className="flex items-baseline gap-3">
@@ -116,7 +116,7 @@ const scenes: Scene[] = [
         <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
           New Drops.
         </h2>
-        <p className="text-sm text-vault-muted">From the wall to your rotation.</p>
+        <p className="text-sm text-vault-cream/70">From the wall to your rotation.</p>
         <Link
           href="#drop-wall"
           className="mt-2 px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm"
@@ -140,7 +140,7 @@ const scenes: Scene[] = [
         <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
           100% Authentic.<br />Every pair.
         </h2>
-        <ul className="space-y-2 text-sm text-vault-muted">
+        <ul className="space-y-2 text-sm text-vault-cream/75">
           <li className="flex items-center gap-2 justify-center">
             <span className="text-vault-scan">✓</span> Verified pairs
           </li>
@@ -194,7 +194,7 @@ const scenes: Scene[] = [
         <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
           Join the Collective.
         </h2>
-        <p className="text-sm text-vault-muted max-w-xs leading-relaxed">
+        <p className="text-sm text-vault-cream/70 max-w-xs leading-relaxed">
           Early drops. Member offers. Cairo&apos;s sneakerhead community.
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
@@ -235,8 +235,13 @@ export default function VaultOverlay() {
         </div>
       ))}
 
-      {/* Scroll progress indicator */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none">
+      {/* Scroll cue — fades out once the walk begins (opacity driven by the
+          scroll loop in VaultExperience); only meaningful at the entrance. */}
+      <div
+        data-scroll-cue
+        style={{ willChange: 'opacity' }}
+        className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none"
+      >
         <span className="text-[9px] tracking-[0.3em] uppercase text-vault-muted/60">Scroll</span>
         <div className="w-px h-8 bg-gradient-to-b from-vault-gold/40 to-transparent animate-pulse" />
       </div>

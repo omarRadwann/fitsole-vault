@@ -178,10 +178,10 @@ export default function CartDrawer() {
               rel="noopener noreferrer"
               className="h-12 w-full flex items-center justify-center text-xs tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm"
             >
-              Checkout
+              Continue on fitsole.shop
             </a>
             <p className="text-[10px] text-center text-vault-muted/60">
-              <span className="text-vault-scan">✓</span> Secure checkout on fitsole.shop
+              You&apos;ll complete your order securely on fitsole.shop
             </p>
           </div>
         )}

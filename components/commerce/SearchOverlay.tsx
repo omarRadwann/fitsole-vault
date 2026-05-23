@@ -47,7 +47,9 @@ export default function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   function goTo(slug: string) {
     onClose()
     requestAnimationFrame(() => {
-      document.getElementById(slug)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      // 'auto' (instant): a smooth jump to a card below the 700vh vault would
+      // crawl the camera through the whole 3D walk first.
+      document.getElementById(slug)?.scrollIntoView({ behavior: 'auto', block: 'start' })
     })
   }
 

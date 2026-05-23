@@ -86,6 +86,12 @@ export default function VaultExperience() {
       container.querySelectorAll<HTMLElement>('.vault-scene-section')
     )
 
+    // The scroll cue is only meaningful at the entrance, and the trust bar
+    // should bow out just before the vault hands off to the flat shop so
+    // neither bleeds over the sections below. Cache both once.
+    const cueEl = container.querySelector<HTMLElement>('[data-scroll-cue]')
+    const trustEl = container.querySelector<HTMLElement>('[data-trust-bar]')
+
     // Update scroll progress and overlay on each frame
     function tick() {
       if (!container) return
@@ -134,6 +140,15 @@ export default function VaultExperience() {
         progressFillRef.current.style.transform = `scaleY(${progress})`
       }
 
+      // Scroll cue fades out as soon as the walk begins; the trust bar fades in
+      // the final stretch so neither lingers over the flat shop below the vault.
+      if (cueEl) cueEl.style.opacity = String(Math.max(0, 1 - progress / 0.05))
+      if (trustEl) {
+        trustEl.style.opacity = String(
+          Math.max(0, Math.min(1, (0.97 - progress) / 0.04))
+        )
+      }
+
       rafRef.current = requestAnimationFrame(tick)
     }
 
@@ -180,8 +195,12 @@ export default function VaultExperience() {
             />
           </div>
 
-          {/* Always-visible trust bar at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 z-10 py-4 px-6">
+          {/* Trust bar — fades out just before the vault hands off to the flat shop. */}
+          <div
+            data-trust-bar
+            style={{ willChange: 'opacity' }}
+            className="absolute bottom-0 left-0 right-0 z-10 py-4 px-6"
+          >
             <div className="flex justify-center gap-8 text-[9px] tracking-[0.2em] uppercase text-vault-muted/50">
               <span>100% Authentic</span>
               <span className="hidden sm:inline">Verified Pairs</span>
