@@ -10,7 +10,7 @@ const BADGE_STYLES: Record<string, string> = {
   New: 'bg-vault-gold/20 text-vault-gold border-vault-gold/30',
   'Best Seller': 'bg-white/10 text-vault-cream border-white/20',
   Sale: 'bg-red-900/40 text-red-300 border-red-700/40',
-  Limited: 'bg-purple-900/40 text-purple-300 border-purple-700/40',
+  Limited: 'bg-vault-gold/15 text-vault-gold border-vault-gold/45',
   Verified: 'bg-vault-scan/20 text-vault-scan border-vault-scan/30',
 }
 
@@ -170,7 +170,7 @@ export default function ProductCard({ product, featured = false }: ProductCardPr
               : 'bg-transparent text-vault-muted border-vault-border cursor-not-allowed opacity-50'
           )}
         >
-          {added ? '✓ Added to Cart' : selectedSize ? 'Add to Cart' : 'Select Size'}
+          {added ? 'Added to cart' : selectedSize ? 'Add to cart' : 'Select size'}
         </button>
       </div>
     </article>

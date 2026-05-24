@@ -28,31 +28,43 @@ export default function BrandStrip() {
   }, [])
 
   return (
-    <section id="brands" className="py-14 px-6 lg:px-8 border-t border-vault-border scroll-mt-20">
-      <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/60 text-center mb-8">
-        Shop by Brand
-      </p>
-      <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-x-16 gap-y-8">
-        {brands.map((brand) => {
-          const logo = BRAND_LOGOS[brand]
-          return (
-            <button
-              key={brand}
-              onClick={() => shopBrand(brand)}
-              aria-label={`Shop ${brand}`}
-              className="flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity duration-300"
-            >
-              {logo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={withBase(logo)} alt={brand} className="h-7 w-auto object-contain" />
-              ) : (
-                <span className="font-display text-2xl tracking-[0.25em] text-vault-cream">
-                  {brand}
+    <section id="brands" className="py-20 sm:py-24 px-6 lg:px-8 border-t border-vault-border scroll-mt-20">
+      <div className="max-w-7xl mx-auto">
+        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/70 mb-10">
+          Shop by Brand
+        </p>
+        <div className="flex flex-wrap items-center gap-x-16 gap-y-10">
+          {brands.map((brand) => {
+            const logo = BRAND_LOGOS[brand]
+            return (
+              <button
+                key={brand}
+                onClick={() => shopBrand(brand)}
+                aria-label={`Shop ${brand}`}
+                className="group flex items-center gap-4 opacity-60 hover:opacity-100 transition-opacity duration-300"
+              >
+                {logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={withBase(logo)}
+                    alt={brand}
+                    className="h-8 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <span className="font-display text-3xl tracking-[0.2em] text-vault-cream transition-transform duration-300 group-hover:scale-105">
+                    {brand}
+                  </span>
+                )}
+                <span className="hidden sm:flex items-center gap-1 text-[10px] tracking-[0.2em] uppercase text-vault-gold opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-80 group-hover:translate-x-0">
+                  Shop
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5" aria-hidden="true">
+                    <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </span>
-              )}
-            </button>
-          )
-        })}
+              </button>
+            )
+          })}
+        </div>
       </div>
     </section>
   )
