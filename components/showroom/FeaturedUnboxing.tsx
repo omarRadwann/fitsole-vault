@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/cn'
+import { withBase } from '@/lib/basePath'
 
 // Scroll-revealed cinematic unboxing (AI-generated: Nano Banana 2 still ->
 // Kling 3.0 motion). The video autoplays muted + looped ONLY while in view
@@ -53,8 +54,8 @@ export default function FeaturedUnboxing() {
             <video
               ref={videoRef}
               className="absolute inset-0 h-full w-full object-cover"
-              src="/video/ae1-unboxing.mp4"
-              poster="/video/ae1-unboxing.webp"
+              src={withBase('/video/ae1-unboxing.mp4')}
+              poster={withBase('/video/ae1-unboxing.webp')}
               muted
               loop
               playsInline

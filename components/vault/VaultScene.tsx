@@ -1,8 +1,8 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, Suspense } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Environment, Lightformer, useTexture } from '@react-three/drei'
+import { Environment, Lightformer, useTexture, useVideoTexture } from '@react-three/drei'
 import { EffectComposer, Bloom, Vignette, ToneMapping } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
@@ -446,28 +446,94 @@ function DoorFrame() {
   )
 }
 
-// ─── Drop-wall feature display ──────────────────────────────────────────────
-// The "New Drops" beat (0.50–0.65) framed an empty corridor centre. This is one
-// feature element, offset from the x≈0 camera path so it fills the frame: a
-// back-lit lightbox with a featured pair on a small lit plinth in front.
-function DropFeature() {
-  // Placeholder reserving x≈-1.6, z≈-5.2 for the Phase 2 live authentication
-  // ticker (<AuthTicker/>). A slim graphite panel so the "New Drops" camera beat
-  // frames an intentional object — not the old back-lit lightbox + GLB pair that
-  // cluttered the shot, and not an empty corridor.
+// ─── Drop-wall video display ────────────────────────────────────────────────
+// The "New Drops" beat glances left to x≈-1.6, z≈-5.2 (LOOK_PATH ~p0.45–0.55).
+// A premium wall-mounted 16:9 display lives here playing the cinematic AE1
+// unboxing (Nano Banana 2 -> Kling) — the video fused INTO the WebGL, with
+// playback gated to the scroll beat so the motion arrives as the camera turns
+// to it (the "Locomotive Scroll Sequence" pattern). Self-lit (toneMapped off)
+// so it reads as a real emitting screen, framed by a graphite bezel + amber edges.
+const SCREEN_W = 1.84
+const SCREEN_H = SCREEN_W * (9 / 16) // true 16:9
+
+// Static bezel — also the Suspense fallback while the video texture's metadata
+// loads, so a buffering video NEVER blanks the vault. Its OWN Suspense boundary
+// keeps the rest of the scene painted (the audit's black-void fix stays intact).
+function DropWallBezel({ screen }: { screen?: boolean }) {
   return (
-    <group position={[-1.6, 0, -5.2]}>
-      <mesh position={[0, 1.4, 0]} material={cardBaseMat}>
-        <boxGeometry args={[1.5, 2.4, 0.08]} />
+    <>
+      <mesh position={[0, 1.4, 0]} material={graphiteMat}>
+        <boxGeometry args={[1.98, 1.18, 0.08]} />
       </mesh>
-      {/* Thin amber accent edges define the panel against the dark wall without a
-          hot light-box; the Phase 2 ticker is where real brightness belongs. */}
-      <mesh position={[0, 2.56, 0.05]} material={amberMat}>
-        <boxGeometry args={[1.5, 0.02, 0.01]} />
+      {/* Dark screen well so the fallback doesn't look like a blank slab */}
+      {!screen && (
+        <mesh position={[0, 1.4, 0.043]} material={cardBaseMat}>
+          <boxGeometry args={[SCREEN_W, SCREEN_H, 0.005]} />
+        </mesh>
+      )}
+      <mesh position={[0, 1.99, 0.05]} material={amberMat}>
+        <boxGeometry args={[1.98, 0.02, 0.01]} />
       </mesh>
-      <mesh position={[0, 0.24, 0.05]} material={amberMat}>
-        <boxGeometry args={[1.5, 0.02, 0.01]} />
+      <mesh position={[0, 0.81, 0.05]} material={amberMat}>
+        <boxGeometry args={[1.98, 0.02, 0.01]} />
       </mesh>
+    </>
+  )
+}
+
+function VaultVideoScreen({
+  scrollProgress,
+}: {
+  scrollProgress: React.MutableRefObject<number>
+}) {
+  const tex = useVideoTexture(withBase('/video/ae1-unboxing.mp4'), {
+    start: false,
+    muted: true,
+    loop: true,
+    playsInline: true,
+  })
+  tex.colorSpace = THREE.SRGBColorSpace
+  const playing = useRef(false)
+
+  useFrame(() => {
+    const vid = tex.image as HTMLVideoElement | undefined
+    if (!vid) return
+    const p = scrollProgress.current
+    // Gate to "visible enough to matter": the wall sits in frame roughly
+    // 0.30–0.62 of the walk. Play (looping) across that window so the motion is
+    // already alive when the camera turns to it; pause outside it to free decode.
+    const shouldPlay = p > 0.3 && p < 0.62
+    if (shouldPlay && !playing.current) {
+      playing.current = true
+      vid.play().catch(() => {})
+    } else if (!shouldPlay && playing.current) {
+      playing.current = false
+      vid.pause()
+    }
+  })
+
+  return (
+    <>
+      <DropWallBezel screen />
+      <mesh position={[0, 1.4, 0.046]}>
+        <planeGeometry args={[SCREEN_W, SCREEN_H]} />
+        <meshBasicMaterial map={tex} toneMapped={false} />
+      </mesh>
+    </>
+  )
+}
+
+function DropFeature({
+  scrollProgress,
+}: {
+  scrollProgress: React.MutableRefObject<number>
+}) {
+  // Yawed toward the centre aisle so the screen faces the glancing camera.
+  return (
+    <group position={[-1.6, 0, -5.2]} rotation={[0, 0.4, 0]}>
+      <Suspense fallback={<DropWallBezel />}>
+        <VaultVideoScreen scrollProgress={scrollProgress} />
+      </Suspense>
     </group>
   )
 }
@@ -726,8 +792,8 @@ export default function VaultScene({ scrollProgress }: VaultSceneProps) {
       <ShelfModule x={4.5} z={-6} idx={5} />
       <ShelfModule x={4.5} z={-9} idx={1} />
 
-      {/* Drop-wall feature display (the "New Drops" focal element) */}
-      <DropFeature />
+      {/* Drop-wall video display (the "New Drops" focal element) */}
+      <DropFeature scrollProgress={scrollProgress} />
 
       {/* Authenticity counter */}
       <AuthenticityCounter />
