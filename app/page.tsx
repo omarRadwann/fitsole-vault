@@ -3,6 +3,7 @@ import VaultExperience from '@/components/vault/VaultExperience'
 import ProductWall from '@/components/commerce/ProductWall'
 import ShopWall from '@/components/commerce/ShopWall'
 import BrandStrip from '@/components/site/BrandStrip'
+import FeaturedUnboxing from '@/components/showroom/FeaturedUnboxing'
 import { newArrivals, bestSellers, onSale, products } from '@/lib/products'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -133,6 +134,9 @@ export default function HomePage() {
       <main>
         {/* Vault Walk — the cinematic 3D experience */}
         <VaultExperience />
+
+        {/* Featured drop — cinematic AI unboxing of the hero pair (Nano Banana 2 -> Kling 3.0) */}
+        <FeaturedUnboxing />
 
         {/* Trust signals */}
         <TrustSection />
