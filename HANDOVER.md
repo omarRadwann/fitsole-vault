@@ -115,6 +115,15 @@ Shipped to `main` + gh-pages (live) in two commits:
   `poster` were raw `/video/...` (404 under the `/fitsole-vault` subpath) → now `withBase()`.
 - **`window.__vaultForce`** = a 0–1 number pins the camera + overlay + video gate to any beat for
   screenshot verification (inert unless set). Chrome MCP tab this session: **1078285256**.
+- **Exit-beat refinement (same session, follow-up):** the membership beat used to end on an empty
+  black void because `LOOK_PATH`'s last point sat on the camera position (a degenerate near-straight-
+  down stare). Changed that endpoint to `(0, 1.05, -16)` so the exit looks DOWN the hall, and added
+  `<ExitThreshold/>` — a quiet warm halo ring (echoes the hero plinth glow) at `z=-17.3` the camera
+  resolves on (also softly visible behind the brand-corridor headline — intended, one continuous
+  "back of the vault" glow). `CAMERA_PATH` end stays `z=-12` (a forward nudge to -13.5 was tried +
+  reverted — it framed a blown-out totem at p≈0.92). Also raised the brand-corridor chip contrast in
+  `VaultOverlay.tsx` (gold border + backing plate, an audit flag), and deleted ~32MB of dead
+  non-optimized GLBs from `public/models/tripo/` (code only loads the `.optimized.glb` variants).
 
 ## 3. File map (key files)
 

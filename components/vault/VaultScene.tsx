@@ -36,7 +36,9 @@ const LOOK_PATH = new THREE.CatmullRomCurve3([
   new THREE.Vector3(-0.8, 1.0, -5),   // soft glance left at the drop feature / Phase-2 ticker
   new THREE.Vector3(0, 0.82, -8),     // dip to the verification counter
   new THREE.Vector3(0, 1.0, -10.5),   // brand corridor
-  new THREE.Vector3(0, 1.0, -12),
+  new THREE.Vector3(0, 1.05, -16),    // exit: look DOWN the hall toward the back-wall halo
+                                      // (was -12 — sat on the camera, a degenerate
+                                      // straight-down stare that left the exit an empty void)
 ])
 
 // Materials
@@ -606,6 +608,43 @@ function BrandCorridor() {
   )
 }
 
+// Exit focal point — the camera ends its walk staring into the dark back of the
+// store, so the final "Join the Collective" beat used to resolve on an empty
+// void. This is a quiet warm halo on the back wall (z≈-16.8) that the camera
+// approaches as it exits: it echoes the hero plinth's signature glow ring (a
+// closing visual rhyme), gives the eye a focal point, and back-lights the
+// membership copy — without faking brand signage. Low intensity so it stays a
+// soft resolution, not another lit sign, and sits below the centred headline.
+function ExitThreshold() {
+  return (
+    <group position={[0, 1.18, -17.3]}>
+      {/* Soft warm fill inside the ring — kept dim so it reads as depth, not a panel */}
+      <mesh position={[0, 0, -0.06]}>
+        <circleGeometry args={[0.92, 48]} />
+        <meshStandardMaterial
+          color="#0E0B08"
+          emissive="#C98A4A"
+          emissiveIntensity={0.28}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* Signature halo ring — same motif as the hero pedestal, as a closing note.
+          Intensity held just above the 0.75 bloom threshold so it glows crisply
+          gold instead of blooming into a white smear. */}
+      <mesh>
+        <ringGeometry args={[0.88, 0.93, 80]} />
+        <meshStandardMaterial
+          color="#FFD9A6"
+          emissive="#FFC98A"
+          emissiveIntensity={1.05}
+          toneMapped={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </group>
+  )
+}
+
 // Slow-drifting dust motes catching the LED light — depth + life in the volume.
 // ~320 additive points on a soft round sprite, recycled upward. Cheap (one draw
 // call, a tiny per-frame y-bump) so it runs on both quality tiers.
@@ -804,6 +843,9 @@ export default function VaultScene({ scrollProgress }: VaultSceneProps) {
 
       {/* Brand corridor — illuminated brand totems (Nike / Adidas / Puma / ON) */}
       <BrandCorridor />
+
+      {/* Exit focal halo — resolves the final "Join the Collective" beat */}
+      <ExitThreshold />
 
       {/* Drifting dust motes */}
       <VaultParticles />

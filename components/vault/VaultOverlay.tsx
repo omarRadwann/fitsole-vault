@@ -175,7 +175,7 @@ const scenes: Scene[] = [
             <Link
               key={brand}
               href={`#brand-${brand.toLowerCase()}`}
-              className="px-4 py-1.5 text-xs tracking-[0.15em] uppercase border border-vault-border text-vault-muted hover:border-vault-gold/50 hover:text-vault-cream transition-colors duration-200 rounded-sm"
+              className="px-4 py-1.5 text-xs tracking-[0.15em] uppercase rounded-sm border border-vault-gold/35 bg-vault-black/40 text-vault-cream/85 backdrop-blur-sm hover:border-vault-gold/70 hover:text-vault-cream hover:bg-vault-gold/10 transition-colors duration-200"
             >
               {brand}
             </Link>
