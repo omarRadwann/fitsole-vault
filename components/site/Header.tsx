@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { useCart } from '@/lib/cart'
+import { useAudio } from '@/lib/audio'
 import CartDrawer from '@/components/commerce/CartDrawer'
 import SearchOverlay from '@/components/commerce/SearchOverlay'
 
@@ -20,6 +21,7 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const { count, setOpen } = useCart()
+  const { muted, toggle: toggleAudio } = useAudio()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
@@ -44,7 +46,7 @@ export default function Header() {
             <span className="font-display text-xl font-semibold tracking-[0.2em] text-vault-cream group-hover:text-vault-gold transition-colors duration-300">
               FITSOLE
             </span>
-            <span className="hidden sm:block text-[10px] tracking-[0.15em] text-vault-gold/60 mt-0.5 uppercase">
+            <span className="hidden sm:block text-[10px] tracking-[0.15em] text-vault-gold/80 mt-0.5 uppercase">
               Cairo
             </span>
           </Link>
@@ -64,6 +66,27 @@ export default function Header() {
 
           {/* Right actions */}
           <div className="flex items-center gap-4">
+            <button
+              onClick={toggleAudio}
+              aria-label={muted ? 'Unmute ambient sound' : 'Mute ambient sound'}
+              aria-pressed={!muted}
+              className="text-vault-muted hover:text-vault-cream transition-colors duration-200 p-1"
+            >
+              {muted ? (
+                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M11 5 6 9H3v6h3l5 4V5z" />
+                  <line x1="23" y1="9" x2="17" y2="15" strokeLinecap="round" />
+                  <line x1="17" y1="9" x2="23" y2="15" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M11 5 6 9H3v6h3l5 4V5z" />
+                  <path d="M15.5 8.5a5 5 0 0 1 0 7" strokeLinecap="round" />
+                  <path d="M18.5 6a8 8 0 0 1 0 12" strokeLinecap="round" />
+                </svg>
+              )}
+            </button>
+
             <button
               onClick={() => setSearchOpen(true)}
               aria-label="Search"

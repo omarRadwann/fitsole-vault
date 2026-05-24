@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic'
 import VaultOverlay from './VaultOverlay'
 import VaultPreloader from './VaultPreloader'
 import Link from 'next/link'
+import Lenis from 'lenis'
+import { audioEngine } from '@/lib/audioEngine'
 
 const VaultCanvas = dynamic(() => import('./VaultCanvas'), { ssr: false })
 
@@ -12,7 +14,7 @@ function VaultStatic() {
   return (
     <div className="relative h-screen flex items-center justify-center bg-vault-black px-6">
       <div className="flex flex-col items-center text-center gap-8 max-w-2xl">
-        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/60">
+        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">
           FitSole · Cairo
         </p>
         <h1 className="font-display text-5xl sm:text-8xl font-semibold tracking-tight text-vault-cream leading-[0.95]">
@@ -51,6 +53,14 @@ export default function VaultExperience() {
   const rafRef = useRef<number>(0)
   const progressFillRef = useRef<HTMLDivElement>(null)
   const [fallback, setFallback] = useState(false)
+  // Render-gate for the WebGL canvas: true while the vault is on-screen, false
+  // once it scrolls out of view below the fold (or the tab is hidden). Drives
+  // <VaultCanvas active> → frameloop, so the heavy scene stops rendering while
+  // the user shops. The ref mirrors state so the rAF tick avoids redundant
+  // re-renders (only flips React state on a boundary crossing).
+  const [vaultVisible, setVaultVisible] = useState(true)
+  const vaultVisibleRef = useRef(true)
+  const entranceCuedRef = useRef(false)
 
   // Serve the lightweight static hero to reduced-motion users and phones.
   // Phones gate on coarse pointer too, so iPads keep the rich 3D walk.
@@ -67,18 +77,35 @@ export default function VaultExperience() {
     }
   }, [])
 
+  // Ambient bed follows the vault: audible only while the WebGL vault is
+  // on-screen, and never on the static fallback / reduced-motion path.
+  useEffect(() => {
+    audioEngine.setBedActive(!fallback && vaultVisible)
+  }, [fallback, vaultVisible])
+
   useEffect(() => {
     if (fallback) return
 
     const container = containerRef.current
     if (!container) return
 
+    // Smooth scroll (Lenis) tames the jagged Windows-trackpad feel on this heavy
+    // scene. It scrolls the REAL window (not a CSS transform), so position:sticky
+    // and the getBoundingClientRect read below stay correct, and it snaps to
+    // programmatic/anchor jumps (kept instant by scroll-behavior:auto) rather
+    // than easing them through the 700vh walk. Reduced-motion / mobile users
+    // never reach here (they get VaultStatic), so Lenis is correctly skipped.
+    const lenis = new Lenis({ lerp: 0.1, smoothWheel: true })
+
     // One damped scroll value drives BOTH the camera (via scrollProgress) and
     // the DOM overlay, so copy and 3D glide together instead of the overlay
     // snapping to raw scroll while the camera eases behind it.
     let damped = -1
     let lastT = performance.now()
-    const SCROLL_DECAY = 9 // higher = tighter; ~110ms time constant
+    // Lenis already smooths the scroll input, so this secondary damping is kept
+    // light (near-transparent) — stacking two heavy easings felt laggy. The
+    // camera's own useFrame lerp still provides the visible glide along the path.
+    const SCROLL_DECAY = 30
 
     // Cache the overlay scene elements once — they're stable after mount,
     // so there's no need to re-query the DOM every frame.
@@ -97,9 +124,20 @@ export default function VaultExperience() {
       if (!container) return
       // Frame-rate-independent damping: consistent feel regardless of FPS.
       const now = performance.now()
+      lenis.raf(now) // advance Lenis on the same frame, before reading the rect
       const dt = Math.min((now - lastT) / 1000, 0.1)
       lastT = now
       const rect = container.getBoundingClientRect()
+      // Park the render loop once the vault has scrolled out of view — nothing
+      // to draw while the user shops below. The rect we already have makes this
+      // free; only flip React state on a boundary cross. (Hidden tabs are
+      // handled by the browser throttling rAF, so no visibilityState coupling
+      // is needed here — and adding it would stall canvas screenshots.)
+      const onScreen = rect.bottom > 0 && rect.top < window.innerHeight
+      if (onScreen !== vaultVisibleRef.current) {
+        vaultVisibleRef.current = onScreen
+        setVaultVisible(onScreen)
+      }
       const scrollableHeight = container.offsetHeight - window.innerHeight
       const scrolled = Math.max(0, -rect.top)
       const rawTarget = Math.max(0, Math.min(1, scrolled / scrollableHeight))
@@ -112,6 +150,15 @@ export default function VaultExperience() {
       const forced = (window as unknown as { __vaultForce?: number }).__vaultForce
       const progress = typeof forced === 'number' ? forced : damped
       scrollProgress.current = progress
+
+      // Entrance whoosh — a one-shot as the walk begins; re-arms at the very top
+      // so it replays on scroll-back. (No-op while muted / before unlock.)
+      if (progress > 0.04 && !entranceCuedRef.current) {
+        entranceCuedRef.current = true
+        audioEngine.playCue('whoosh')
+      } else if (progress < 0.01) {
+        entranceCuedRef.current = false
+      }
 
       // Update overlay section opacities
       sceneEls.forEach((el) => {
@@ -142,7 +189,7 @@ export default function VaultExperience() {
 
       // Scroll cue fades out as soon as the walk begins; the trust bar fades in
       // the final stretch so neither lingers over the flat shop below the vault.
-      if (cueEl) cueEl.style.opacity = String(Math.max(0, 1 - progress / 0.05))
+      if (cueEl) cueEl.style.opacity = String(Math.max(0, 1 - progress / 0.08))
       if (trustEl) {
         trustEl.style.opacity = String(
           Math.max(0, Math.min(1, (0.97 - progress) / 0.04))
@@ -163,6 +210,7 @@ export default function VaultExperience() {
       cancelAnimationFrame(rafRef.current)
       clearTimeout(t1)
       clearTimeout(t2)
+      lenis.destroy()
     }
   }, [fallback])
 
@@ -178,12 +226,12 @@ export default function VaultExperience() {
         <div className="sticky top-0 h-screen w-full overflow-hidden">
           {/* 3D canvas */}
           <div className="absolute inset-0">
-            <VaultCanvas scrollProgress={scrollProgress} />
+            <VaultCanvas scrollProgress={scrollProgress} active={vaultVisible} />
           </div>
 
           {/* DOM overlays */}
           <div className="absolute inset-0">
-            <VaultOverlay />
+            <VaultOverlay scrollProgress={scrollProgress} />
           </div>
 
           {/* Story progress indicator */}

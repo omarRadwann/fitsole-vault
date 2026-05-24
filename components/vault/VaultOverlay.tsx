@@ -1,7 +1,9 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { products, formatPrice } from '@/lib/products'
+import { audioEngine } from '@/lib/audioEngine'
 
 // The pair sitting on the 3D pedestal — ties the hero render to a real, shoppable SKU.
 const heroProduct = products.find((p) => p.id === 'adidas-ae1') ?? products[0]
@@ -20,7 +22,7 @@ const scenes: Scene[] = [
     to: 0.18,
     content: (
       <div className="flex flex-col items-center text-center gap-6">
-        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/60">FitSole · Cairo</p>
+        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">FitSole · Cairo</p>
         <h1 className="font-display text-5xl sm:text-7xl lg:text-8xl font-semibold tracking-tight text-vault-cream leading-[0.95]">
           Egypt&apos;s<br />Sneaker Vault
         </h1>
@@ -28,12 +30,13 @@ const scenes: Scene[] = [
           Authentic heat, curated drops, and sneaker culture born in Cairo.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 mt-2">
-          <Link
-            href="#vault-walk"
-            className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm"
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
+            className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm cursor-pointer"
           >
             Enter the Vault
-          </Link>
+          </button>
           <Link
             href="#new-arrivals"
             className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium border border-vault-gold/40 text-vault-gold hover:bg-vault-gold/10 transition-colors duration-200 rounded-sm"
@@ -50,7 +53,7 @@ const scenes: Scene[] = [
     to: 0.32,
     content: (
       <div className="flex flex-col items-center text-center gap-4">
-        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/60">The Vault is Open</p>
+        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">The Vault is Open</p>
         <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
           Step Inside.
         </h2>
@@ -112,7 +115,7 @@ const scenes: Scene[] = [
     to: 0.65,
     content: (
       <div className="flex flex-col items-center text-center gap-4">
-        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/60">The Wall</p>
+        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">The Wall</p>
         <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
           New Drops.
         </h2>
@@ -127,46 +130,12 @@ const scenes: Scene[] = [
     ),
   },
   {
-    id: 'authenticity',
-    from: 0.65,
-    to: 0.80,
-    content: (
-      <div className="flex flex-col items-center text-center gap-5">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-px bg-vault-scan" />
-          <p className="text-[10px] tracking-[0.4em] uppercase text-vault-scan">Verification System</p>
-          <div className="w-4 h-px bg-vault-scan" />
-        </div>
-        <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
-          100% Authentic.<br />Every pair.
-        </h2>
-        <ul className="space-y-2 text-sm text-vault-cream/75">
-          <li className="flex items-center gap-2 justify-center">
-            <span className="text-vault-scan">✓</span> Verified pairs
-          </li>
-          <li className="flex items-center gap-2 justify-center">
-            <span className="text-vault-scan">✓</span> Clean exchange
-          </li>
-          <li className="flex items-center gap-2 justify-center">
-            <span className="text-vault-scan">✓</span> Fast checkout
-          </li>
-        </ul>
-        <Link
-          href="#shop"
-          className="mt-1 px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium border border-vault-scan/40 text-vault-scan hover:bg-vault-scan/10 transition-colors duration-200 rounded-sm"
-        >
-          Shop Verified Drops
-        </Link>
-      </div>
-    ),
-  },
-  {
     id: 'brands',
     from: 0.80,
     to: 0.92,
     content: (
       <div className="flex flex-col items-center text-center gap-5">
-        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/60">Brand Corridor</p>
+        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">Brand Corridor</p>
         <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
           Every brand.<br />One vault.
         </h2>
@@ -174,7 +143,7 @@ const scenes: Scene[] = [
           {['Nike', 'Adidas', 'Puma', 'ON'].map((brand) => (
             <Link
               key={brand}
-              href={`#brand-${brand.toLowerCase()}`}
+              href="#drop-wall"
               className="px-4 py-1.5 text-xs tracking-[0.15em] uppercase rounded-sm border border-vault-gold/35 bg-vault-black/40 text-vault-cream/85 backdrop-blur-sm hover:border-vault-gold/70 hover:text-vault-cream hover:bg-vault-gold/10 transition-colors duration-200"
             >
               {brand}
@@ -190,7 +159,7 @@ const scenes: Scene[] = [
     to: 1.0,
     content: (
       <div className="flex flex-col items-center text-center gap-5">
-        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/60">FitSole Collective</p>
+        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">FitSole Collective</p>
         <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
           Join the Collective.
         </h2>
@@ -199,13 +168,13 @@ const scenes: Scene[] = [
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
-            href="#join"
+            href="#new-arrivals"
             className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm"
           >
-            Create Account
+            Claim Your Pair
           </Link>
           <Link
-            href="#shop"
+            href="#drop-wall"
             className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium border border-vault-gold/40 text-vault-gold hover:bg-vault-gold/10 transition-colors duration-200 rounded-sm"
           >
             Step into your rotation
@@ -216,9 +185,125 @@ const scenes: Scene[] = [
   },
 ]
 
-export default function VaultOverlay() {
+// Authentication Beat — a staged "verification" sequence at the authenticity
+// window (0.65–0.80): a violet UV scanline sweeps the card, three badges burn in
+// (Stitch → Weight → UV), a brass plaque inscribes the lot, and an auth chime
+// fires on the third badge. Re-arms on scroll-back. Driven by scrollProgress so
+// it stays in lockstep with the camera; its opacity is still faded by the tick
+// via the shared .vault-scene-section wrapper.
+function AuthScene({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+  const [stage, setStage] = useState(0)
+  const armedRef = useRef(true)
+
+  useEffect(() => {
+    let raf = 0
+    const timers: number[] = []
+    const clear = () => {
+      timers.forEach((t) => clearTimeout(t))
+      timers.length = 0
+    }
+    const loop = () => {
+      const p = scrollProgress.current
+      if (p > 0.66 && p < 0.8 && armedRef.current) {
+        armedRef.current = false
+        clear()
+        setStage(1) // scanline sweep begins
+        timers.push(
+          window.setTimeout(() => setStage(2), 520), // STITCH ✓
+          window.setTimeout(() => setStage(3), 880), // WEIGHT ✓
+          window.setTimeout(() => {
+            setStage(4) // UV ✓
+            audioEngine.playCue('chime')
+          }, 1240),
+          window.setTimeout(() => setStage(5), 1640) // brass plaque inscribes
+        )
+      } else if ((p < 0.63 || p > 0.83) && !armedRef.current) {
+        armedRef.current = true
+        clear()
+        setStage(0)
+      }
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => {
+      cancelAnimationFrame(raf)
+      clear()
+    }
+  }, [scrollProgress])
+
+  const badges = [
+    { label: 'Stitch', on: stage >= 2 },
+    { label: 'Weight', on: stage >= 3 },
+    { label: 'UV', on: stage >= 4 },
+  ]
+
   return (
-    <div className="absolute inset-0 pointer-events-none" aria-live="polite">
+    <div
+      id="vault-scene-authenticity"
+      data-scene-from={0.65}
+      data-scene-to={0.8}
+      className="vault-scene-section absolute inset-0 flex items-center justify-center px-6 opacity-0 pointer-events-none"
+      style={{ willChange: 'opacity' }}
+    >
+      <div className="vault-scrim" />
+      <div className={`vault-authscan${stage >= 1 ? ' vault-authscan--run' : ''}`} />
+      <div className="pointer-events-auto vault-copy w-full" style={{ willChange: 'transform' }}>
+        <div className="flex flex-col items-center text-center gap-5">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-px bg-vault-scan" />
+            <p className="text-[10px] tracking-[0.4em] uppercase text-vault-scan">Verification System</p>
+            <div className="w-4 h-px bg-vault-scan" />
+          </div>
+          <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
+            100% Authentic.<br />Every pair.
+          </h2>
+          <div className="flex gap-3 mt-1">
+            {badges.map((b) => (
+              <div
+                key={b.label}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-vault-scan/40 bg-vault-black/40 backdrop-blur-sm transition-all duration-500 ease-out"
+                style={{
+                  opacity: b.on ? 1 : 0,
+                  transform: b.on ? 'translateY(0) scale(1)' : 'translateY(8px) scale(0.92)',
+                }}
+              >
+                <span className="text-vault-scan text-sm leading-none">✓</span>
+                <span className="text-[10px] tracking-[0.2em] uppercase text-vault-cream/85">{b.label}</span>
+              </div>
+            ))}
+          </div>
+          <div
+            className="transition-all duration-700 ease-out"
+            style={{
+              opacity: stage >= 5 ? 1 : 0,
+              transform: stage >= 5 ? 'translateY(0)' : 'translateY(10px)',
+            }}
+          >
+            <div className="vault-plaque inline-block px-5 py-2 rounded-sm">
+              <span className="text-[10px] tracking-[0.28em] uppercase font-medium">
+                Lot #04219 · 24 May 2026 · Cairo
+              </span>
+            </div>
+          </div>
+          <Link
+            href="#drop-wall"
+            className="mt-1 px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium border border-vault-scan/40 text-vault-scan hover:bg-vault-scan/10 transition-colors duration-200 rounded-sm"
+          >
+            Shop Verified Drops
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function VaultOverlay({
+  scrollProgress,
+}: {
+  scrollProgress: React.MutableRefObject<number>
+}) {
+  return (
+    <div className="absolute inset-0 pointer-events-none">
       {scenes.map((scene) => (
         <div
           key={scene.id}
@@ -235,6 +320,8 @@ export default function VaultOverlay() {
         </div>
       ))}
 
+      <AuthScene scrollProgress={scrollProgress} />
+
       {/* Scroll cue — fades out once the walk begins (opacity driven by the
           scroll loop in VaultExperience); only meaningful at the entrance. */}
       <div
@@ -242,8 +329,8 @@ export default function VaultOverlay() {
         style={{ willChange: 'opacity' }}
         className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none"
       >
-        <span className="text-[9px] tracking-[0.3em] uppercase text-vault-muted/60">Scroll</span>
-        <div className="w-px h-8 bg-gradient-to-b from-vault-gold/40 to-transparent animate-pulse" />
+        <span className="text-[9px] tracking-[0.3em] uppercase text-vault-cream/60">Scroll</span>
+        <div className="w-px h-9 bg-gradient-to-b from-vault-gold/70 to-transparent vault-scroll-tick" />
       </div>
     </div>
   )

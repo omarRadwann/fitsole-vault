@@ -7,6 +7,9 @@ import VaultScene, { type QualityTier } from './VaultScene'
 
 interface VaultCanvasProps {
   scrollProgress: React.MutableRefObject<number>
+  // When false, the render loop is parked (frameloop="never") — the vault has
+  // scrolled out of view or the tab is hidden, so there's nothing to draw.
+  active: boolean
 }
 
 function LoadingFallback() {
@@ -28,7 +31,7 @@ function readForcedTier(): QualityTier | null {
   return t === 'high' || t === 'low' ? t : null
 }
 
-export default function VaultCanvas({ scrollProgress }: VaultCanvasProps) {
+export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps) {
   // A ?tier= override pins the tier for measurement; otherwise it adapts.
   const forcedTier = useMemo(readForcedTier, [])
 
@@ -55,6 +58,11 @@ export default function VaultCanvas({ scrollProgress }: VaultCanvasProps) {
     <>
       <Canvas
         flat
+        // Render only while the vault is on-screen. Parked ("never") when the
+        // user scrolls into the flat shop below or hides the tab, so the heavy
+        // scene stops costing GPU. Flips back to "always" on scroll-back —
+        // R3F reacts to the prop and resumes the loop (and all useFrame anims).
+        frameloop={active ? 'always' : 'never'}
         camera={{ position: [0, 1.8, 12], fov: 55, near: 0.1, far: 60 }}
         dpr={dpr}
         gl={{

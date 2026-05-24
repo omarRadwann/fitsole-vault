@@ -20,7 +20,7 @@ function TrustSection() {
 
   return (
     <section className="border-y border-vault-border">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y divide-vault-border sm:divide-y-0 sm:divide-x">
+      <div className="reveal-up max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y divide-vault-border sm:divide-y-0 sm:divide-x">
         {points.map((point) => (
           <div key={point.k} className="px-6 lg:px-8 py-10 flex flex-col gap-3">
             <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-vault-gold/70">
@@ -48,7 +48,7 @@ function CategoryNav() {
 
   return (
     <section className="py-20 sm:py-28 px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+      <div className="reveal-up max-w-7xl mx-auto">
         <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/70 mb-10">The Collections</p>
         <div className="border-t border-vault-border">
           {cats.map((cat) => (
@@ -90,7 +90,7 @@ function Footer() {
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row justify-between items-start gap-8 mb-10">
           <div>
-            <p className="font-display text-lg tracking-[0.2em] text-vault-cream mb-1">FITSOLE</p>
+            <p className="font-display text-2xl sm:text-3xl tracking-[0.2em] text-vault-cream mb-1">FITSOLE</p>
             <p className="text-xs text-vault-muted">Born in Cairo. Built for Sneakerheads.</p>
           </div>
           <div className="flex flex-wrap gap-x-10 gap-y-4">
@@ -113,10 +113,10 @@ function Footer() {
         </div>
         <div className="vault-gold-line opacity-30" />
         <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <p className="text-[10px] text-vault-muted/50">
+          <p className="text-[10px] text-vault-cream/60">
             © 2025 FitSole. All rights reserved. Cairo, Egypt.
           </p>
-          <p className="text-[10px] text-vault-muted/50 flex items-center gap-1.5">
+          <p className="text-[10px] text-vault-cream/60 flex items-center gap-1.5">
             <span className="text-vault-scan">✓</span>
             All products 100% authenticated
           </p>
@@ -154,6 +154,7 @@ export default function HomePage() {
           title="New Arrivals."
           subtitle="Just Dropped"
           limit={8}
+          lead
         />
 
         {/* Best Sellers */}

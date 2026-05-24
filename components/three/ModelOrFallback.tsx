@@ -14,7 +14,8 @@ interface BoundaryState {
 
 // Catches the throw from useGLTF when a GLB is missing (404) or invalid,
 // so the scene falls back to placeholder geometry instead of crashing.
-class AssetErrorBoundary extends Component<BoundaryProps, BoundaryState> {
+// Exported so the instanced shelf shoes (VaultScene) can reuse the same guard.
+export class AssetErrorBoundary extends Component<BoundaryProps, BoundaryState> {
   state: BoundaryState = { hasError: false }
 
   static getDerivedStateFromError(): BoundaryState {

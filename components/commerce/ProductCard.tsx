@@ -9,7 +9,7 @@ import { useCart } from '@/lib/cart'
 const BADGE_STYLES: Record<string, string> = {
   New: 'bg-vault-gold/20 text-vault-gold border-vault-gold/30',
   'Best Seller': 'bg-white/10 text-vault-cream border-white/20',
-  Sale: 'bg-red-900/40 text-red-300 border-red-700/40',
+  Sale: 'bg-[#5A2D1A]/55 text-[#E8A36A] border-[#8A4A28]/50',
   Limited: 'bg-vault-gold/15 text-vault-gold border-vault-gold/45',
   Verified: 'bg-vault-scan/20 text-vault-scan border-vault-scan/30',
 }
@@ -122,7 +122,7 @@ export default function ProductCard({ product, featured = false }: ProductCardPr
 
         {/* Price */}
         <div className="flex items-baseline gap-2">
-          <span className="text-base font-semibold text-vault-cream">
+          <span className="font-display text-base font-medium text-vault-cream">
             {formatPrice(displayPrice)}
           </span>
           {product.salePrice && (
@@ -165,7 +165,7 @@ export default function ProductCard({ product, featured = false }: ProductCardPr
             'mt-1 h-10 w-full text-xs tracking-[0.15em] uppercase font-medium rounded border transition-all duration-200',
             selectedSize
               ? added
-                ? 'bg-vault-scan/20 text-vault-scan border-vault-scan/40'
+                ? 'bg-vault-gold/25 text-vault-gold border-vault-gold/50'
                 : 'bg-vault-gold/10 text-vault-gold border-vault-gold/40 hover:bg-vault-gold hover:text-vault-black'
               : 'bg-transparent text-vault-muted border-vault-border cursor-not-allowed opacity-50'
           )}

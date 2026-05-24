@@ -29,11 +29,11 @@ export default function BrandStrip() {
 
   return (
     <section id="brands" className="py-20 sm:py-24 px-6 lg:px-8 border-t border-vault-border scroll-mt-20">
-      <div className="max-w-7xl mx-auto">
-        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/70 mb-10">
+      <div className="reveal-up max-w-7xl mx-auto">
+        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/70 mb-10 text-center">
           Shop by Brand
         </p>
-        <div className="flex flex-wrap items-center gap-x-16 gap-y-10">
+        <div className="flex flex-wrap items-center justify-center gap-x-12 sm:gap-x-20 gap-y-10">
           {brands.map((brand) => {
             const logo = BRAND_LOGOS[brand]
             return (

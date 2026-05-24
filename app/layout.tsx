@@ -3,6 +3,7 @@ import { Geist } from 'next/font/google'
 import { Playfair_Display } from 'next/font/google'
 import './globals.css'
 import { CartProvider } from '@/lib/cart'
+import { AudioProvider } from '@/lib/audio'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -40,7 +41,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${playfair.variable}`}
     >
       <body className="min-h-screen bg-vault-black text-vault-cream">
-        <CartProvider>{children}</CartProvider>
+        <CartProvider>
+          <AudioProvider>{children}</AudioProvider>
+        </CartProvider>
       </body>
     </html>
   )

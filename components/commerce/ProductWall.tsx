@@ -10,6 +10,8 @@ interface ProductWallProps {
   title?: string
   subtitle?: string
   id?: string
+  /** Lead wall — gets the larger headline so the shop keeps the vault's scale. */
+  lead?: boolean
 }
 
 // Send the matching filter to the full "The Wall" grid, then scroll there.
@@ -26,6 +28,7 @@ export default function ProductWall({
   title,
   subtitle,
   id,
+  lead = false,
 }: ProductWallProps) {
   const source =
     filter === 'new'
@@ -41,14 +44,18 @@ export default function ProductWall({
   return (
     <section id={id} className="py-20 px-6 lg:px-8 max-w-7xl mx-auto scroll-mt-20">
       {(title || subtitle) && (
-        <header className="mb-12">
+        <header className="reveal-up mb-12">
           {subtitle && (
-            <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/60 mb-3">
+            <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80 mb-3">
               {subtitle}
             </p>
           )}
           {title && (
-            <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
+            <h2
+              className={`font-display font-semibold text-vault-cream leading-tight ${
+                lead ? 'text-5xl sm:text-6xl lg:text-7xl' : 'text-4xl sm:text-5xl'
+              }`}
+            >
               {title}
             </h2>
           )}

@@ -77,16 +77,16 @@ export default function FeaturedUnboxing() {
             <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-vault-muted">
               adidas · Basketball
             </span>
-            <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-[0.95] tracking-tight mt-3">
+            <h2 className="font-display text-5xl sm:text-6xl lg:text-7xl font-semibold text-vault-cream leading-[0.95] tracking-tight mt-3">
               A.E. 1 Low
             </h2>
-            <p className="text-sm text-vault-cream/60 leading-relaxed max-w-[42ch] mt-5">
-              Sealed, verified, unboxed in the vault — every pair authenticated before
-              it ships from Cairo.
+            <p className="text-sm text-vault-cream/70 leading-relaxed max-w-[42ch] mt-5">
+              The pair from the pedestal — sealed, verified, and unboxed in the vault,
+              authenticated before it ships from Cairo.
             </p>
             <a
               href="#adidas-ae-1-low"
-              className="group/cta mt-8 inline-flex items-center gap-2 text-xs tracking-[0.2em] uppercase text-vault-gold hover:text-vault-cream transition-colors duration-200"
+              className="group/cta mt-8 inline-flex items-center gap-2 px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium border border-vault-gold/40 text-vault-gold hover:bg-vault-gold/10 hover:border-vault-gold/70 transition-colors duration-200 rounded-sm"
             >
               Shop this pair
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 transition-transform duration-300 group-hover/cta:translate-x-1" aria-hidden="true">

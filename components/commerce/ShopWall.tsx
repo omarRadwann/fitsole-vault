@@ -76,8 +76,8 @@ export default function ShopWall({
 
   return (
     <section id={id} className="py-20 px-6 lg:px-8 max-w-7xl mx-auto scroll-mt-20">
-      <header className="mb-8">
-        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/60 mb-3">{subtitle}</p>
+      <header className="reveal-up mb-8">
+        <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80 mb-3">{subtitle}</p>
         <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
           {title}
         </h2>
