@@ -1,5 +1,7 @@
 # FitSole — Egypt's Sneaker Vault · Session Handover
 
+> **▶ NEXT SESSION START HERE: [`MOONSHOT_HANDOVER.md`](./MOONSHOT_HANDOVER.md)** — the codebase-reconciled v4 plan to take the site to the moon (perf foundation → audio → authentication beat → brass plinth → wax seal → sky-moment bridge). Read this file's §0 first for gotchas, then the moonshot doc.
+
 > Cinematic 3D Awwwards-style ecommerce homepage rebrand of **fitsole.shop**.
 > A scroll-driven "walk through a Cairo sneaker vault" that is also a real, shoppable store.
 > **Standing directive from the user: "make this a masterpiece. keep going."**
