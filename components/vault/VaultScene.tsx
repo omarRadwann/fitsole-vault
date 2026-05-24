@@ -10,30 +10,32 @@ import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS, SHELF_SNEAKERS } from '@/lib/assets'
 import { withBase } from '@/lib/basePath'
 
+// A smooth, confident walk straight down the CENTRE of the store. The corridor
+// stays symmetric (vanishing point centred) so it reads as real — not a sway.
+// Position drifts only ±0.25 for a touch of life; the gaze stays forward except
+// one soft glance left at the drop feature. (An earlier aggressive left/right
+// swing crammed the scene to one side and left half the frame an empty black
+// void — that's what "didn't feel real".) The side shelves still sweep past in
+// the periphery as the camera dollies forward, so depth is preserved.
 const CAMERA_PATH = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(0, 1.8, 12),
-  new THREE.Vector3(0, 1.5, 8),
-  new THREE.Vector3(0, 1.3, 4),
-  new THREE.Vector3(0, 1.1, 0.5),
-  new THREE.Vector3(0, 1.0, -3),
-  new THREE.Vector3(0, 1.0, -6.5),
-  new THREE.Vector3(0, 1.0, -9.5),
-  new THREE.Vector3(0, 1.1, -12),
+  new THREE.Vector3(0, 1.8, 12),      // entrance, centred outside the door
+  new THREE.Vector3(0, 1.55, 8.5),    // forward, centred — stable approach
+  new THREE.Vector3(0, 1.32, 4.5),    // forward, centred
+  new THREE.Vector3(0, 1.12, 1.0),    // centre on the hero pedestal (z=0)
+  new THREE.Vector3(-0.25, 1.05, -3), // gentle drift left toward the drop feature
+  new THREE.Vector3(0, 1.0, -6.5),    // re-centre, approach the counter (z=-8)
+  new THREE.Vector3(0.2, 1.05, -9.5), // gentle drift right into the brand corridor
+  new THREE.Vector3(0, 1.1, -12),     // exit deeper down the hall
 ])
 
 const LOOK_PATH = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(0, 0.8, 6),
-  new THREE.Vector3(0, 0.8, 4),
-  new THREE.Vector3(0, 0.8, 0),
-  new THREE.Vector3(0, 0.9, -1),
-  // Back half raised toward eye level. The gaze used to drop to y=0.6 and stare
-  // at the corridor floor (the "empty brown gradient" the audit saw); levelling
-  // it frames the counter, the brand totems and the drop feature instead.
-  new THREE.Vector3(0, 0.92, -4),
-  // Authenticity beat dips toward the verification counter (z≈-8, low) so it
-  // reads as the centrepiece instead of the brand totems further down the hall.
-  new THREE.Vector3(0, 0.78, -8),
-  new THREE.Vector3(0, 1.0, -10),
+  new THREE.Vector3(0, 1.0, 6),       // look straight down the corridor
+  new THREE.Vector3(0, 1.0, 3),
+  new THREE.Vector3(0, 1.0, 0),
+  new THREE.Vector3(0, 1.05, -1),     // hero centred
+  new THREE.Vector3(-0.8, 1.0, -5),   // soft glance left at the drop feature / Phase-2 ticker
+  new THREE.Vector3(0, 0.82, -8),     // dip to the verification counter
+  new THREE.Vector3(0, 1.0, -10.5),   // brand corridor
   new THREE.Vector3(0, 1.0, -12),
 ])
 
@@ -122,7 +124,7 @@ const boxBlackMat = new THREE.MeshStandardMaterial({
   metalness: 0.1,
 })
 const boxBoneMat = new THREE.MeshStandardMaterial({
-  color: '#E8E1D3',
+  color: '#574E42',
   roughness: 0.6,
   metalness: 0.0,
 })
@@ -133,6 +135,14 @@ const floorMat = new THREE.MeshStandardMaterial({
   color: '#0E0B08',
   roughness: 0.22,
   metalness: 0.9,
+})
+// Matte-clay treatment for the generic Tripo shelf shoes — one dark sculptural
+// material so they read as intentional set dressing under the amber LEDs, not
+// fake-colourful AI-3D shoes that fight the "100% authentic" pitch.
+const clayShelfMat = new THREE.MeshStandardMaterial({
+  color: '#211d18',
+  roughness: 0.72,
+  metalness: 0.05,
 })
 
 function CeilingStrips() {
@@ -212,6 +222,7 @@ function ShelfModule({ x, z, idx }: { x: number; z: number; idx: number }) {
             url={SHELF_SNEAKERS[(idx + i) % SHELF_SNEAKERS.length]}
             normalizeTo={0.42}
             seat="bottom"
+            material={clayShelfMat}
             fallback={
               <mesh position={[0, 0.13, 0]} material={heroMat} scale={[1, 0.5, 0.4]}>
                 <boxGeometry args={[0.42, 0.26, 0.2]} />
@@ -306,14 +317,19 @@ function AuthenticityCounter() {
 function HeroDisplay() {
   const shoeGroupRef = useRef<THREE.Group>(null)
   const clock = useRef(0)
+  const rotTarget = useRef(0)
   // Target the spotlight cone at the sneaker height.
   const spotTarget = useMemo(() => new THREE.Object3D(), [])
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     clock.current += delta
+    // Slow turntable drift PLUS a cursor nudge, eased — the hero feels alive and
+    // responsive instead of running on a fixed timer.
+    rotTarget.current = clock.current * 0.25 + state.pointer.x * 0.7
     if (shoeGroupRef.current) {
-      // Slow premium turntable rotation + subtle float above the pedestal.
-      shoeGroupRef.current.rotation.y = clock.current * 0.25
+      const cur = shoeGroupRef.current.rotation.y
+      const f = 1 - Math.exp(-6 * Math.min(delta, 0.1))
+      shoeGroupRef.current.rotation.y = cur + (rotTarget.current - cur) * f
       shoeGroupRef.current.position.y = 1.3 + Math.sin(clock.current * 0.9) * 0.03
     }
   })
@@ -332,6 +348,11 @@ function HeroDisplay() {
         distance={9}
         decay={2}
         color="#FFF6EC"
+        castShadow
+        shadow-mapSize={[1024, 1024]}
+        shadow-bias={-0.0002}
+        shadow-camera-near={0.5}
+        shadow-camera-far={10}
       />
       {/* Glowing ground halo on the platform (blooms under the shoe) */}
       <mesh position={[0, 1.045, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -353,7 +374,7 @@ function HeroDisplay() {
       <mesh position={[0, 0.55, 0]} material={plinithMat}>
         <cylinderGeometry args={[0.2, 0.2, 0.9, 32]} />
       </mesh>
-      <mesh position={[0, 1.0, 0]} material={metalMat}>
+      <mesh position={[0, 1.0, 0]} material={metalMat} receiveShadow>
         <cylinderGeometry args={[0.5, 0.5, 0.04, 48]} />
       </mesh>
       <mesh position={[0, 1.03, 0]} material={goldMat}>
@@ -367,6 +388,7 @@ function HeroDisplay() {
           url={ASSETS.heroSneaker}
           normalizeTo={0.92}
           seat="center"
+          castShadow
           fallback={
             <mesh material={heroMat}>
               <torusKnotGeometry args={[0.28, 0.09, 128, 16, 2, 3]} />
@@ -438,46 +460,22 @@ function DoorFrame() {
 // feature element, offset from the x≈0 camera path so it fills the frame: a
 // back-lit lightbox with a featured pair on a small lit plinth in front.
 function DropFeature() {
+  // Placeholder reserving x≈-1.6, z≈-5.2 for the Phase 2 live authentication
+  // ticker (<AuthTicker/>). A slim graphite panel so the "New Drops" camera beat
+  // frames an intentional object — not the old back-lit lightbox + GLB pair that
+  // cluttered the shot, and not an empty corridor.
   return (
     <group position={[-1.6, 0, -5.2]}>
-      {/* Tall dark housing */}
-      <mesh position={[0, 1.5, -0.06]} material={cardBaseMat}>
-        <boxGeometry args={[1.7, 2.7, 0.1]} />
+      <mesh position={[0, 1.4, 0]} material={cardBaseMat}>
+        <boxGeometry args={[1.5, 2.4, 0.08]} />
       </mesh>
-      {/* Soft back-lit panel face — kept gentle so it reads as a glow, not a
-          flare, and never steals focus from the front-half hero behind it. */}
-      <mesh position={[0, 1.5, 0]}>
-        <planeGeometry args={[1.46, 2.42]} />
-        <meshStandardMaterial color="#241910" emissive="#FFB366" emissiveIntensity={0.25} toneMapped={false} />
+      {/* Thin amber accent edges define the panel against the dark wall without a
+          hot light-box; the Phase 2 ticker is where real brightness belongs. */}
+      <mesh position={[0, 2.56, 0.05]} material={amberMat}>
+        <boxGeometry args={[1.5, 0.02, 0.01]} />
       </mesh>
-      {/* Gold frame top + bottom */}
-      <mesh position={[0, 2.78, 0.02]} material={goldMat}>
-        <boxGeometry args={[1.72, 0.05, 0.04]} />
-      </mesh>
-      <mesh position={[0, 0.22, 0.02]} material={goldMat}>
-        <boxGeometry args={[1.72, 0.05, 0.04]} />
-      </mesh>
-      {/* Featured pair on a small plinth, in front of the panel, facing camera */}
-      <mesh position={[0, 0.18, 0.62]} material={plinithMat}>
-        <cylinderGeometry args={[0.42, 0.46, 0.36, 32]} />
-      </mesh>
-      <group position={[0, 0.37, 0.62]} rotation={[0, 0.6, 0]}>
-        <ModelOrFallback
-          url={SHELF_SNEAKERS[1]}
-          normalizeTo={0.62}
-          seat="bottom"
-          fallback={
-            <mesh position={[0, 0.12, 0]} material={heroMat}>
-              <boxGeometry args={[0.5, 0.24, 0.2]} />
-            </mesh>
-          }
-        />
-      </group>
-      {/* Warm halo ring under the featured pair — emissive bumped (1.1→1.6) now
-          that the dedicated feature point light is gone; IBL + halo carry it. */}
-      <mesh position={[0, 0.375, 0.62]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.3, 0.42, 48]} />
-        <meshStandardMaterial color="#FFB366" emissive="#FFB366" emissiveIntensity={1.6} transparent opacity={0.9} side={THREE.DoubleSide} />
+      <mesh position={[0, 0.24, 0.05]} material={amberMat}>
+        <boxGeometry args={[1.5, 0.02, 0.01]} />
       </mesh>
     </group>
   )
@@ -551,6 +549,58 @@ function BrandCorridor() {
   )
 }
 
+// Slow-drifting dust motes catching the LED light — depth + life in the volume.
+// ~320 additive points on a soft round sprite, recycled upward. Cheap (one draw
+// call, a tiny per-frame y-bump) so it runs on both quality tiers.
+function VaultParticles({ count = 320 }: { count?: number }) {
+  const ref = useRef<THREE.Points>(null)
+  const { positions, texture } = useMemo(() => {
+    const positions = new Float32Array(count * 3)
+    for (let i = 0; i < count; i++) {
+      positions[i * 3 + 0] = (Math.random() - 0.5) * 9
+      positions[i * 3 + 1] = Math.random() * 3.4
+      positions[i * 3 + 2] = -16 + Math.random() * 26
+    }
+    const c = document.createElement('canvas')
+    c.width = c.height = 64
+    const ctx = c.getContext('2d')!
+    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+    g.addColorStop(0, 'rgba(255,238,206,1)')
+    g.addColorStop(1, 'rgba(255,238,206,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 64, 64)
+    return { positions, texture: new THREE.CanvasTexture(c) }
+  }, [count])
+
+  useFrame((_, delta) => {
+    const pts = ref.current
+    if (!pts) return
+    const arr = pts.geometry.attributes.position.array as Float32Array
+    for (let i = 0; i < count; i++) {
+      arr[i * 3 + 1] += delta * 0.06
+      if (arr[i * 3 + 1] > 3.4) arr[i * 3 + 1] = 0
+    }
+    pts.geometry.attributes.position.needsUpdate = true
+  })
+
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.045}
+        map={texture}
+        transparent
+        opacity={0.18}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        sizeAttenuation
+      />
+    </points>
+  )
+}
+
 export type QualityTier = 'high' | 'low'
 
 interface VaultSceneProps {
@@ -563,16 +613,25 @@ export default function VaultScene({ scrollProgress }: VaultSceneProps) {
   const cameraTarget = useMemo(() => new THREE.Vector3(), [])
   const cameraPos = useMemo(() => new THREE.Vector3(), [])
   const lookTarget = useMemo(() => new THREE.Vector3(), [])
+  const prevProgress = useRef(0)
 
   useFrame((state, delta) => {
     const p = Math.max(0, Math.min(1, scrollProgress.current))
 
+    // Per-frame scroll delta — gate parallax during fast scroll so the camera
+    // doesn't yaw toward the walls while the user is flicking through the vault.
+    const scrollDelta = Math.abs(p - prevProgress.current)
+    prevProgress.current = p
+
     CAMERA_PATH.getPoint(p, cameraPos)
     LOOK_PATH.getPoint(p, lookTarget)
 
-    // Subtle mouse parallax — premium, alive, never nauseating.
-    cameraPos.x += state.pointer.x * 0.28
-    cameraPos.y += state.pointer.y * 0.16
+    // Subtle mouse parallax — tightened (was 0.28/0.16) to stay premium and
+    // never clip the walls; skipped entirely while scrolling fast.
+    if (scrollDelta < 0.002) {
+      cameraPos.x += state.pointer.x * 0.1
+      cameraPos.y += state.pointer.y * 0.06
+    }
 
     // Frame-rate-independent easing: same feel at 30fps or 120fps. Scroll
     // progress is already damped upstream, so this mainly smooths parallax.
@@ -580,16 +639,14 @@ export default function VaultScene({ scrollProgress }: VaultSceneProps) {
     state.camera.position.lerp(cameraPos, f)
     cameraTarget.lerp(lookTarget, f)
     state.camera.lookAt(cameraTarget)
-
-    // Gentle LED breathing on the store strips.
-    const t = state.clock.elapsedTime
-    stripMat.emissiveIntensity = 1.3 + Math.sin(t * 1.6) * 0.2
+    // (LED "breathing" removed — the strips stay at a steady emissive so they
+    // no longer flicker across the bloom threshold.)
   })
 
   return (
     <>
       {/* Fog */}
-      <fog attach="fog" args={['#090806', 10, 35]} />
+      <fog attach="fog" args={['#1A100A', 6, 26]} />
 
       {/* Baked image-based lighting — now the PRIMARY light source (the Awwwards
           approach). Rendered ONCE into a cubemap (frames={1}), so it lights every
@@ -617,7 +674,7 @@ export default function VaultScene({ scrollProgress }: VaultSceneProps) {
           Identical on both tiers — now cheap enough that the quality ladder
           scales only DPR + premium post, not lights. ambient + directional stay
           (constant / no per-fragment attenuation = nearly free) for global fill. */}
-      <ambientLight intensity={0.34} />
+      <ambientLight intensity={0.22} />
       <directionalLight position={[3, 6, 14]} intensity={0.5} color="#6E8AB8" />
       {/* Warm amber glow leaking out through the glass door / entrance */}
       <pointLight position={[0, 2.3, 8]} intensity={9} color="#FFB366" distance={10} decay={2} />
@@ -691,10 +748,8 @@ export default function VaultScene({ scrollProgress }: VaultSceneProps) {
       {/* Brand corridor — illuminated brand totems (Nike / Adidas / Puma / ON) */}
       <BrandCorridor />
 
-      {/* Subtle floor reflection stripe */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} material={goldMat}>
-        <planeGeometry args={[0.02, 30]} />
-      </mesh>
+      {/* Drifting dust motes */}
+      <VaultParticles />
 
       {/* Cinematic post. The Canvas renders linear HDR (flat), bloom blooms only
           the brightest emissives in HDR, then ToneMapping (ACES Filmic) maps the

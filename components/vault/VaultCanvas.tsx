@@ -62,7 +62,7 @@ export default function VaultCanvas({ scrollProgress }: VaultCanvasProps) {
           alpha: false,
           powerPreference: 'high-performance',
         }}
-        shadows={false}
+        shadows="percentage"
         style={{ background: '#0C0B0A' }}
         aria-hidden="true"
       >

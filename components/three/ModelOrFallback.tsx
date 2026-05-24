@@ -36,6 +36,11 @@ interface LoadedModelProps {
   normalizeTo?: number
   // Where to anchor the normalized model: sitting on the floor or centered.
   seat?: 'bottom' | 'center'
+  // Cast shadows from every mesh (hero only — perf cost not justified elsewhere).
+  castShadow?: boolean
+  // Replace every mesh's material with this shared one (matte-clay treatment for
+  // the generic Tripo shelf shoes, so their AI-3D look reads as intentional set dressing).
+  material?: THREE.Material
 }
 
 function LoadedModel({
@@ -45,6 +50,8 @@ function LoadedModel({
   rotation,
   normalizeTo,
   seat = 'bottom',
+  castShadow = false,
+  material,
 }: LoadedModelProps) {
   const gltf = useGLTF(url)
   // Clone so the same GLB can be instanced in multiple places (e.g. shelf modules).
@@ -68,8 +75,17 @@ function LoadedModel({
       clone.position.y -= seat === 'bottom' ? box2.min.y : center.y
     }
 
+    if (castShadow || material) {
+      clone.traverse((o) => {
+        const mesh = o as THREE.Mesh
+        if (!mesh.isMesh) return
+        if (castShadow) mesh.castShadow = true
+        if (material) mesh.material = material
+      })
+    }
+
     return clone
-  }, [gltf.scene, normalizeTo, seat])
+  }, [gltf.scene, normalizeTo, seat, castShadow, material])
 
   return <primitive object={object} scale={scale} position={position} rotation={rotation} />
 }
