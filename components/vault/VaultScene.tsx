@@ -136,14 +136,6 @@ const floorMat = new THREE.MeshStandardMaterial({
   roughness: 0.22,
   metalness: 0.9,
 })
-// Matte-clay treatment for the generic Tripo shelf shoes — one dark sculptural
-// material so they read as intentional set dressing under the amber LEDs, not
-// fake-colourful AI-3D shoes that fight the "100% authentic" pitch.
-const clayShelfMat = new THREE.MeshStandardMaterial({
-  color: '#211d18',
-  roughness: 0.72,
-  metalness: 0.05,
-})
 
 function CeilingStrips() {
   const positions: [number, number, number][] = [
@@ -222,7 +214,6 @@ function ShelfModule({ x, z, idx }: { x: number; z: number; idx: number }) {
             url={SHELF_SNEAKERS[(idx + i) % SHELF_SNEAKERS.length]}
             normalizeTo={0.42}
             seat="bottom"
-            material={clayShelfMat}
             fallback={
               <mesh position={[0, 0.13, 0]} material={heroMat} scale={[1, 0.5, 0.4]}>
                 <boxGeometry args={[0.42, 0.26, 0.2]} />
