@@ -89,6 +89,33 @@ The homepage is a **complete, shoppable, cinematic experience**. Production buil
 
 ---
 
+## 2.5 — Latest session (real sneakers + video fused into WebGL)
+
+Shipped to `main` + gh-pages (live) in two commits:
+
+- **Phase A `cacfb6f` — real Tripo sneakers.** All 7 placeholder GLBs replaced with photoreal
+  Tripo models generated from the real fitsole product shots (refs in `Desktop/fitsole-tripo-refs/`),
+  optimized via gltf-transform (webp, 1024px, meshopt): hero **A.E. 1 Low** (983KB) + 6 shelf pairs
+  (~0.6–0.7MB each). Dropped the `clayShelfMat` tint so each pair shows its true colorway. Verified
+  orientation at the hero (0.43), entrance (0.12), and New Drops (0.6) beats. The shelf-shoe yaw is
+  `rotation={[0, sx>0?-1.15:1.15, 0]}` — re-check if you swap shelf models again.
+- **Phase B `978ebb4` — unboxing film fused into the 3D vault.** `DropFeature` (x=-1.6/z=-5.2, the
+  "New Drops" glance beat) is now a wall-mounted **16:9 video display** playing the cinematic A.E. 1
+  unboxing via drei **`useVideoTexture`** (`meshBasicMaterial`, `toneMapped={false}`, sRGB,
+  `withBase('/video/ae1-unboxing.mp4')`), framed by a graphite bezel + amber edges, yawed `0.4` rad
+  toward the aisle. **Playback is scroll-gated** in a `useFrame`: plays (looping) only across
+  `p≈0.30–0.62`, pauses otherwise. **Critical:** the video sits in its **OWN `<Suspense fallback={DropWallBezel}>`**
+  inside VaultScene so a buffering texture can never blank the whole scene (VaultCanvas wraps the
+  WHOLE scene in one Suspense — do NOT add another suspending hook to VaultScene without its own boundary).
+- **Video asset:** `public/video/ae1-unboxing.mp4` is a **seamless loop** (Kling 3.0 `pro`, 16:9, sound off,
+  `start_image = end_image` = the unboxing still → invisible loop seam). **1.5MB** (was 6.4MB). Poster
+  `ae1-unboxing.webp` (75KB) is that same anchor still. Higgsfield MCP balance ~580 credits (Pro).
+- **`FeaturedUnboxing.tsx`** (flat section after the vault) — KEPT (it's the only product motion on the
+  mobile/reduced-motion path where the 3D wall doesn't mount). Fixed a live bug: its `<video>` `src` +
+  `poster` were raw `/video/...` (404 under the `/fitsole-vault` subpath) → now `withBase()`.
+- **`window.__vaultForce`** = a 0–1 number pins the camera + overlay + video gate to any beat for
+  screenshot verification (inert unless set). Chrome MCP tab this session: **1078285256**.
+
 ## 3. File map (key files)
 
 ```
@@ -172,7 +199,11 @@ cd /c/Users/acer/Desktop/fitsole-rebranding && npm run dev        # localhost:30
 - Keep text readable over 3D (scrim + text-shadow). No AI-faked brand logos.
 - Never blanket-kill node; never leave `overflow-x: hidden` on html/body (it broke sticky scroll — must be `clip`).
 - localStorage in React: empty initial state, load in `useEffect`, persist after a `hydrated` flag — never read storage at module scope or in a `useState` initializer (causes hydration divergence).
-- Nothing has been committed to git this session (all changes are working-tree only). Decide with the user before committing.
+- Ship workflow: commit to **`main`** → `git push origin main` → `GITHUB_PAGES=true npm run build` →
+  `npx --yes gh-pages -d out --dotfiles` (publishes the static `out/` to the gh-pages branch, served at
+  omarradwann.github.io/fitsole-vault). The user has approved pushing directly to `main`. Commit msgs via
+  `git commit -F <file>` (here-strings break in this shell). Raw asset URLs (GLB/texture/**video**/`<img>`)
+  MUST use `withBase()` — next/image + next/link auto-prefix, raw `src`/`poster` do NOT (404s on the subpath).
 
 ---
 
