@@ -2,7 +2,7 @@
 
 import { Canvas } from '@react-three/fiber'
 import { PerformanceMonitor, Stats } from '@react-three/drei'
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import VaultScene from './VaultScene'
 import {
   type QualityTier,
@@ -12,6 +12,7 @@ import {
   tierFromGpu,
   readForcedTier,
 } from '@/lib/deviceTier'
+import { DebugStats, DebugOverlay, makeDebugSink } from './VaultDebug'
 
 interface VaultCanvasProps {
   scrollProgress: React.MutableRefObject<number>
@@ -30,16 +31,17 @@ function LoadingFallback() {
 }
 
 export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps) {
-  // ?tier=high|standard|safe PINS the tier (no auto-change) so the owner can
-  // measure a specific tier on a real device.
-  const forcedTier = useMemo(readForcedTier, [])
+  // Tier resolution: a MANUAL pin (URL ?tier= or the debug overlay's H/S/L buttons)
+  // always wins; otherwise the AUTO tier adapts (conservative boot guess → GPU
+  // string in onCreated → PerformanceMonitor, one-way DOWN only).
+  const urlForced = useMemo(() => readForcedTier(), [])
+  const [manualTier, setManualTier] = useState<QualityTier | null>(urlForced)
+  const [autoTier, setAutoTier] = useState<QualityTier>(() => urlForced ?? initialTier())
+  const tier = manualTier ?? autoTier
+  const forced = manualTier !== null
 
-  // Conservative boot guess (mostly STANDARD). The real GPU string — read in
-  // onCreated before the preloader opens — lifts it to HIGH (discrete / Apple
-  // GPU) or drops it to SAFE (Intel iGPU / software rasterizer), so there's no
-  // visible pop. After that it only ever degrades (PerformanceMonitor, one-way).
-  const [tier, setTier] = useState<QualityTier>(() => forcedTier ?? initialTier())
   const [gpu, setGpu] = useState('')
+  const [webgl2, setWebgl2] = useState(true)
 
   // DPR is DERIVED from the tier — clamped to [1.0, cap]. It never drops below 1.0:
   // the old PerformanceMonitor 0.6 floor is exactly what made weak laptops blurry.
@@ -47,16 +49,32 @@ export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps
   // tier and the EFFECT cuts (N8AO/bloom/particles/shadows) do the perf work.
   const dpr = useMemo(() => clampDpr(tier), [tier])
 
-  // Gate dev overlays behind mount so URL-derived (client-only) DOM doesn't cause
-  // a hydration mismatch with the server markup.
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-  const showStats = mounted && new URLSearchParams(window.location.search).has('fps')
+  // Dev overlays. ?fps → drei Stats graph. ?debug=1 / Shift+D → the §8 readout.
+  // VaultCanvas is dynamic(ssr:false) → client-only, so reading the URL during
+  // render is hydration-safe (no server markup to mismatch) — no mount guard needed.
+  const [debug, setDebug] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug')
+  )
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.shiftKey && (e.key === 'D' || e.key === 'd')) setDebug((d) => !d)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const showStats =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('fps')
+  const sink = useRef(makeDebugSink())
 
   // One-way degrade. The action is "drop a tier" (cut the expensive effects FIRST,
   // per briefing §6.2) — not "crush DPR." Resolution stays native; the look
   // simplifies. A capable device that dips once never oscillates back up.
-  const degrade = () => setTier((t) => (t === 'high' ? 'standard' : 'safe'))
+  const degrade = useCallback(() => {
+    if (manualTier) return
+    setAutoTier((t) => (t === 'high' ? 'standard' : 'safe'))
+  }, [manualTier])
+
+  const forceTier = useCallback((t: QualityTier) => setManualTier(t), [])
 
   return (
     <>
@@ -82,44 +100,39 @@ export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps
         onCreated={({ gl }) => {
           const renderer = readGpuRenderer(gl.getContext())
           setGpu(renderer)
+          setWebgl2(gl.capabilities.isWebGL2)
           // GPU string is the most reliable capability signal — it catches the
           // classic "gaming laptop running on the Intel iGPU" case → SAFE.
-          if (!forcedTier) {
-            const hint = tierFromGpu(renderer)
-            if (hint) setTier(hint)
-          }
+          const hint = manualTier ? null : tierFromGpu(renderer)
+          if (hint) setAutoTier(hint)
+          // Boot diagnostic — the same data the §8 overlay shows, for QA logs.
+          console.log(
+            `[vault] tier:${manualTier ?? hint ?? autoTier} dpr:${dpr.toFixed(2)} webgl2:${gl.capabilities.isWebGL2} gpu:${renderer || 'unknown'}`
+          )
         }}
       >
         <PerformanceMonitor
           flipflops={3}
-          onDecline={() => { if (!forcedTier) degrade() }}
-          onFallback={() => { if (!forcedTier) setTier('safe') }}
+          onDecline={degrade}
+          onFallback={() => { if (!manualTier) setAutoTier('safe') }}
         />
         {showStats && <Stats />}
+        {debug && <DebugStats sink={sink} />}
         <Suspense fallback={<LoadingFallback />}>
           <VaultScene scrollProgress={scrollProgress} active={active} tier={tier} />
         </Suspense>
       </Canvas>
-      {showStats && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 50,
-            left: 0,
-            zIndex: 10000,
-            padding: '2px 6px',
-            background: 'rgba(0,0,0,0.7)',
-            color: '#BFA06A',
-            font: '11px/1.4 monospace',
-            pointerEvents: 'none',
-            whiteSpace: 'nowrap',
-            maxWidth: '60vw',
-          }}
-        >
-          tier:{tier}{forcedTier ? ' (forced)' : ''} dpr:{dpr.toFixed(2)}
-          <br />
-          gpu:{gpu || '—'}
-        </div>
+      {debug && (
+        <DebugOverlay
+          sink={sink}
+          tier={tier}
+          forced={forced}
+          dpr={dpr}
+          gpu={gpu}
+          webgl2={webgl2}
+          scrollProgress={scrollProgress}
+          onForceTier={forceTier}
+        />
       )}
     </>
   )
