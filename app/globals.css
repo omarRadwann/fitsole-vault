@@ -9,7 +9,11 @@
   --color-vault-gold: #BFA06A;
   --color-vault-gold-dim: #7A6440;
   --color-vault-cream: #F2EDE4;
-  --color-vault-muted: #6E685D;
+  /* Secondary/label text. Lifted from #6E685D (~3.5:1 — failed WCAG AA) to a
+     warmer taupe-grey that clears 4.5:1 on BOTH the black (#0C0B0A → 5.4:1) and
+     the card (#1D1A17 → 4.8:1) surfaces it sits on, while staying clearly below
+     cream so it still reads as de-emphasised. Don't darken it back for "mood." */
+  --color-vault-muted: #8E867A;
   --color-vault-green: #35E0A1;
   --color-vault-scan: #35E0A1;
 

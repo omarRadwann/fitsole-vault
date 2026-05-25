@@ -157,20 +157,27 @@ export default function ProductCard({ product, featured = false }: ProductCardPr
           </div>
         </div>
 
-        {/* CTA */}
+        {/* CTA — the "added" state flips to a confident solid-gold confirm with a
+            check tick (was a faint label-only swap), so the add reads as a
+            definitive, tactile moment before the eye reaches the opening drawer. */}
         <button
           onClick={handleAddToCart}
           disabled={!selectedSize}
           className={cn(
-            'mt-1 h-10 w-full text-xs tracking-[0.15em] uppercase font-medium rounded border transition-all duration-200',
+            'mt-1 h-10 w-full flex items-center justify-center gap-1.5 text-xs tracking-[0.15em] uppercase font-medium rounded border transition-all duration-200',
             selectedSize
               ? added
-                ? 'bg-vault-gold/25 text-vault-gold border-vault-gold/50'
+                ? 'bg-vault-gold text-vault-black border-vault-gold'
                 : 'bg-vault-gold/10 text-vault-gold border-vault-gold/40 hover:bg-vault-gold hover:text-vault-black'
               : 'bg-transparent text-vault-muted border-vault-border cursor-not-allowed opacity-50'
           )}
         >
-          {added ? 'Added to cart' : selectedSize ? 'Add to cart' : 'Select size'}
+          {added && (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+          {added ? 'Added' : selectedSize ? 'Add to cart' : 'Select size'}
         </button>
       </div>
     </article>

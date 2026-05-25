@@ -134,8 +134,12 @@ const scenes: Scene[] = [
   },
   {
     id: 'brands',
+    // to=0.93 (was 0.92) so the brand copy fades out exactly as membership
+    // (from=0.93) fades in — closes a ~1% dead beat where BOTH sections were at
+    // opacity 0 and the overlay went briefly blank. Adjacent, not overlapping, so
+    // the two centred headlines never double up.
     from: 0.80,
-    to: 0.92,
+    to: 0.93,
     content: (
       <div className="flex flex-col items-center text-center gap-5">
         <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">Brand Corridor</p>

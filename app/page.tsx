@@ -114,7 +114,7 @@ function Footer() {
         <div className="vault-gold-line opacity-30" />
         <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-[10px] text-vault-cream/60">
-            © 2025 FitSole. All rights reserved. Cairo, Egypt.
+            © 2026 FitSole. All rights reserved. Cairo, Egypt.
           </p>
           <p className="text-[10px] text-vault-cream/60 flex items-center gap-1.5">
             <span className="text-vault-scan">✓</span>

@@ -3,7 +3,7 @@
 import { useRef, useMemo, useEffect, useLayoutEffect, Suspense } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Environment, Lightformer, RoundedBox, useGLTF, useTexture, useVideoTexture } from '@react-three/drei'
-import { EffectComposer, Bloom, Vignette, ToneMapping, N8AO } from '@react-three/postprocessing'
+import { EffectComposer, Bloom, Vignette, ToneMapping, N8AO, SMAA } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import ModelOrFallback, { AssetErrorBoundary } from '@/components/three/ModelOrFallback'
@@ -1063,6 +1063,17 @@ export default function VaultScene({ scrollProgress, active }: VaultSceneProps) 
   const prevProgress = useRef(0)
   const shadowReady = useRef(false)
   const shadowTick = useRef(0)
+  // Snap-on-resume guard. While the vault is parked (scrolled past → frameloop
+  // "never"), useFrame doesn't run, so the camera freezes at the exit beat. If
+  // the user then jumps straight back to the top (the logo links to "/" → scroll
+  // to top) the camera would lerp the WHOLE corridor back while the DOM overlay
+  // had already snapped to the entrance copy — a visible copy/camera desync.
+  // Flag a one-frame snap whenever the canvas (re)activates; set in an effect
+  // because the transition happens while the frameloop is parked.
+  const needsSnap = useRef(true)
+  useEffect(() => {
+    if (active) needsSnap.current = true
+  }, [active])
 
   useFrame((state, delta) => {
     // Shadow throttle: the ONLY moving shadow caster is the slow hero turntable
@@ -1097,11 +1108,20 @@ export default function VaultScene({ scrollProgress, active }: VaultSceneProps) 
       cameraPos.y += state.pointer.y * 0.06
     }
 
-    // Frame-rate-independent easing: same feel at 30fps or 120fps. Scroll
-    // progress is already damped upstream, so this mainly smooths parallax.
-    const f = 1 - Math.exp(-12 * Math.min(delta, 0.1))
-    state.camera.position.lerp(cameraPos, f)
-    cameraTarget.lerp(lookTarget, f)
+    if (needsSnap.current) {
+      // First frame after mount/resume — seed the camera AT the current beat so
+      // a jump-to-top while parked doesn't sweep the corridor out of sync with
+      // the overlay. (At normal mount this is the entrance, where it already is.)
+      needsSnap.current = false
+      state.camera.position.copy(cameraPos)
+      cameraTarget.copy(lookTarget)
+    } else {
+      // Frame-rate-independent easing: same feel at 30fps or 120fps. Scroll
+      // progress is already damped upstream, so this mainly smooths parallax.
+      const f = 1 - Math.exp(-12 * Math.min(delta, 0.1))
+      state.camera.position.lerp(cameraPos, f)
+      cameraTarget.lerp(lookTarget, f)
+    }
     state.camera.lookAt(cameraTarget)
 
     // Audio-reactive vault — the LED strips + amber edges breathe with the
@@ -1257,6 +1277,13 @@ export default function VaultScene({ scrollProgress, active }: VaultSceneProps) 
         />
         <Vignette offset={0.32} darkness={0.62} />
         <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+        {/* Edge AA on the FINAL tonemapped frame. The composer renders to an
+            intermediate buffer (multisampling=0), so the context-level
+            antialias:true never reaches the composited output — without this the
+            bright LED strips, brass chamfers and glossy floor reflections crawl
+            and shimmer as the camera dollies. SMAA (cheap, mobile-safe) runs last
+            so it AAs the LDR result, not the linear-HDR pre-tonemap values. */}
+        <SMAA />
       </EffectComposer>
     </>
   )
