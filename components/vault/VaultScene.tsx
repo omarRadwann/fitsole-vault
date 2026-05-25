@@ -336,10 +336,13 @@ function ShelfShoes() {
 const CHECKOUT_W = 1.5
 const CHECKOUT_H = CHECKOUT_W * (9 / 16)
 
-// The cashier video loop on the counter display — beat-gated to the counter
-// window (≈0.45–0.86) so only ONE video decodes through the heavy finale (the
-// screen is behind the camera there anyway). Skipped entirely on SAFE; the poster
-// carries the screen and the scan bar (below) keeps it alive.
+// The cashier video loop on the counter display. Gated to ≈0.30–0.88 — it starts
+// decoding EARLY (well before the counter is in frame at ~0.5) so it's already
+// playing, not a cold poster, by the time you see it: that decode latency was the
+// "frozen image on arrival" symptom. The decode spike lands on a transit beat, not
+// the hero dwell (0.46), and it's paused well before the finale so it never decodes
+// alongside the membership wall. loop:true (above) keeps it cycling continuously.
+// Skipped entirely on SAFE; the poster + scan bar carry the screen.
 function CashierVideo({ active, scrollProgress }: { active: boolean; scrollProgress: React.MutableRefObject<number> }) {
   const tex = useVideoTexture(withBase('/video/ae1-authenticate.mp4'), {
     start: false,
@@ -362,7 +365,10 @@ function CashierVideo({ active, scrollProgress }: { active: boolean; scrollProgr
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid || !matRef.current) return
     const p = scrollProgress.current
-    const shouldPlay = active && p > 0.45 && p < 0.86
+    // Pre-roll: begin ~0.15 of scroll BEFORE the counter is framed so decode is done
+    // by the time it's visible (kills the "frozen poster on arrival"); stop before
+    // the finale so it never decodes next to the membership wall video.
+    const shouldPlay = active && p > 0.3 && p < 0.88
     if (shouldPlay && !playing.current) {
       playing.current = true
       vid.play().catch(() => {})

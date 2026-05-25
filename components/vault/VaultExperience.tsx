@@ -165,16 +165,16 @@ export default function VaultExperience() {
       const dt = Math.min((now - lastT) / 1000, 0.1)
       lastT = now
       const rect = container.getBoundingClientRect()
-      // Park the render loop once the vault has scrolled WELL out of view, but
-      // keep a one-viewport buffer on each side so the canvas pre-warms (renders
-      // a frame or two) BEFORE it scrolls back into view — otherwise scrolling
-      // back up from the shop showed a black, laggy gap while the frozen loop
-      // resumed. The rect we already have makes this free; only flip React state
-      // on a boundary cross. (Hidden tabs are handled by the browser throttling
-      // rAF, so no visibilityState coupling is needed — and it would stall
-      // canvas screenshots.)
+      // Park the render loop almost as soon as the vault scrolls off the top —
+      // keep only a SMALL 0.3-viewport pre-warm below so scroll-back doesn't show a
+      // black gap. The old 1-viewport buffer kept the (now HIGH-tier) scene
+      // rendering at full cost for a whole screen-height INTO the flat shop, which
+      // is exactly the vault→shop transition stutter: the heavy scene composited on
+      // top of the incoming storefront. 0.3vh still pre-warms a frame or two before
+      // re-entry. The rect we already have makes this free; only flip React state on
+      // a boundary cross. (Hidden tabs are handled by the browser throttling rAF.)
       const vh = window.innerHeight
-      const onScreen = rect.bottom > -vh && rect.top < vh * 2
+      const onScreen = rect.bottom > -vh * 0.3 && rect.top < vh * 2
       if (onScreen !== vaultVisibleRef.current) {
         vaultVisibleRef.current = onScreen
         setVaultVisible(onScreen)

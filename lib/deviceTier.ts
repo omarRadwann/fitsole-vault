@@ -57,11 +57,13 @@ export function tierFromGpu(renderer: string): QualityTier | null {
   if (!r) return null
   // Discrete / Apple Silicon → HIGH.
   if (/(rtx|gtx|geforce|radeon|\barc\b|apple m[1-9]|quadro|nvidia)/.test(r)) return 'high'
-  // Modern, capable Intel iGPU (Iris Xe / Iris Plus) → STANDARD, not SAFE — these
-  // run the standard stack (native DPR + bloom, no SSAO) smoothly. Checked BEFORE
-  // the generic "intel" rule below. PerformanceMonitor still drops to SAFE if a
-  // given chip can't sustain it.
-  if (/iris/.test(r)) return 'standard'
+  // Modern, capable Intel iGPU (Iris Xe / Iris Plus) → HIGH. Measured: Iris Xe
+  // sustains the full stack (SSAO + bloom + particles + 1024 env) at ~100+ fps, so
+  // STANDARD was needlessly stripping ambient occlusion + reflections + particles
+  // from a capable machine and reading as flatter, less "lit" on scroll. Checked
+  // BEFORE the generic "intel" rule. PerformanceMonitor still degrades one-way to
+  // STANDARD→SAFE if a weaker Iris (older Iris Plus) can't actually hold it.
+  if (/iris/.test(r)) return 'high'
   // Weak integrated / software / mobile GPUs → SAFE.
   if (/(intel|uhd|hd graphics|mali|adreno|powervr|llvmpipe|swiftshader|microsoft basic|softwarerasterizer)/.test(r)) {
     return 'safe'
