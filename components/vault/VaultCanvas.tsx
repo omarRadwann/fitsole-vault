@@ -89,7 +89,7 @@ export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps
         />
         {showStats && <Stats />}
         <Suspense fallback={<LoadingFallback />}>
-          <VaultScene scrollProgress={scrollProgress} />
+          <VaultScene scrollProgress={scrollProgress} active={active} />
         </Suspense>
       </Canvas>
       {showStats && (

@@ -47,6 +47,42 @@ function VaultStatic() {
   )
 }
 
+// ── Camera pacing ────────────────────────────────────────────────────────────
+// Reparametrize linear scroll so the walk DWELLS on its two money shots — the
+// hero plinth (~0.46) and the membership reveal (~0.95) — and moves a touch
+// quicker through the transit between them, instead of gliding at one constant
+// "museum-tour" velocity. Built as the normalized integral of a speed profile
+// that dips at those beats, which makes it GUARANTEED strictly monotonic (scroll
+// can never stick or reverse) with ease(0)=0, ease(1)=1. Both the camera curve
+// AND the overlay captions read the same eased progress, so they stay in sync —
+// the whole beat lingers together. Deliberately modest (~35% slow-down); deepen
+// the `amt` values for a more pronounced hold. NOTE: this only changes traversal
+// VELOCITY, not any keyframe framing, so it isn't visible in a static screenshot
+// — only felt while scrolling.
+const DWELL_LUT = (() => {
+  const N = 240
+  const lut = new Float32Array(N + 1)
+  const gauss = (p: number, c: number, w: number, amt: number) =>
+    amt * Math.exp(-((p - c) * (p - c)) / (2 * w * w))
+  const speed = (p: number) =>
+    Math.max(0.5, 1 - gauss(p, 0.46, 0.06, 0.35) - gauss(p, 0.95, 0.05, 0.35))
+  let acc = 0
+  for (let i = 0; i < N; i++) {
+    acc += speed(i / N)
+    lut[i + 1] = acc
+  }
+  for (let i = 0; i <= N; i++) lut[i] /= acc // normalize → lut[0]=0, lut[N]=1
+  return lut
+})()
+function dwellEase(p: number): number {
+  if (p <= 0) return 0
+  if (p >= 1) return 1
+  const x = p * 240
+  const i = Math.floor(x)
+  const f = x - i
+  return DWELL_LUT[i] * (1 - f) + DWELL_LUT[i + 1] * f
+}
+
 export default function VaultExperience() {
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollProgress = useRef(0)
@@ -118,6 +154,7 @@ export default function VaultExperience() {
     // neither bleeds over the sections below. Cache both once.
     const cueEl = container.querySelector<HTMLElement>('[data-scroll-cue]')
     const trustEl = container.querySelector<HTMLElement>('[data-trust-bar]')
+    const scrimEl = container.querySelector<HTMLElement>('[data-vault-scrim]')
 
     // Update scroll progress and overlay on each frame
     function tick() {
@@ -128,12 +165,16 @@ export default function VaultExperience() {
       const dt = Math.min((now - lastT) / 1000, 0.1)
       lastT = now
       const rect = container.getBoundingClientRect()
-      // Park the render loop once the vault has scrolled out of view — nothing
-      // to draw while the user shops below. The rect we already have makes this
-      // free; only flip React state on a boundary cross. (Hidden tabs are
-      // handled by the browser throttling rAF, so no visibilityState coupling
-      // is needed here — and adding it would stall canvas screenshots.)
-      const onScreen = rect.bottom > 0 && rect.top < window.innerHeight
+      // Park the render loop once the vault has scrolled WELL out of view, but
+      // keep a one-viewport buffer on each side so the canvas pre-warms (renders
+      // a frame or two) BEFORE it scrolls back into view — otherwise scrolling
+      // back up from the shop showed a black, laggy gap while the frozen loop
+      // resumed. The rect we already have makes this free; only flip React state
+      // on a boundary cross. (Hidden tabs are handled by the browser throttling
+      // rAF, so no visibilityState coupling is needed — and it would stall
+      // canvas screenshots.)
+      const vh = window.innerHeight
+      const onScreen = rect.bottom > -vh && rect.top < vh * 2
       if (onScreen !== vaultVisibleRef.current) {
         vaultVisibleRef.current = onScreen
         setVaultVisible(onScreen)
@@ -148,7 +189,9 @@ export default function VaultExperience() {
       // window.__vaultForce to a 0–1 number to pin the camera + overlay to any
       // beat regardless of scroll. Inert unless the global is set.
       const forced = (window as unknown as { __vaultForce?: number }).__vaultForce
-      const progress = typeof forced === 'number' ? forced : damped
+      // Ease ONLY the real scroll (dwell on the hero + membership beats). The dev
+      // __vaultForce hook stays a DIRECT curve-param control for screenshot checks.
+      const progress = typeof forced === 'number' ? forced : dwellEase(damped)
       scrollProgress.current = progress
 
       // Entrance whoosh — a one-shot as the walk begins; re-arms at the very top
@@ -193,6 +236,19 @@ export default function VaultExperience() {
       if (trustEl) {
         trustEl.style.opacity = String(
           Math.max(0, Math.min(1, (0.97 - progress) / 0.04))
+        )
+      }
+      // Fade-to-black bridge: the walk resolves INTO black over the last 5% so the
+      // storefront below (same vault-black bg) "lights up" from the dark instead of
+      // hard-cutting. Peaks after the membership copy so the finale reads first.
+      if (scrimEl) {
+        // Darken-not-blackout: cap at ~0.5 so the finale frame stays VISIBLE as the
+        // sticky viewport scrolls away. The vault→shop seam then reads as a dim
+        // vignette bridge instead of a full-viewport black void (the "big gap" —
+        // the sticky takes a whole 100vh to release, and a fully-opaque scrim made
+        // that entire stretch dead black). The storefront still rises out of dusk.
+        scrimEl.style.opacity = String(
+          Math.max(0, Math.min(0.5, (progress - 0.95) / 0.05))
         )
       }
 
@@ -256,6 +312,14 @@ export default function VaultExperience() {
               <span className="hidden sm:inline">Fast Delivery</span>
             </div>
           </div>
+
+          {/* Fade-to-black bridge: vault resolves into black so the storefront lights up from it */}
+          <div
+            data-vault-scrim
+            aria-hidden
+            style={{ opacity: 0, willChange: 'opacity' }}
+            className="pointer-events-none absolute inset-0 z-20 bg-vault-black"
+          />
         </div>
       </div>
       </>

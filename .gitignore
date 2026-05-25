@@ -48,3 +48,6 @@ next-env.d.ts
 
 # local reference / knowledge pack (not part of the app)
 /_pack_v5/
+
+# scratch: AI video generation candidates (not part of the app/deploy)
+/.vidcand/

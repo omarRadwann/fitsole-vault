@@ -33,7 +33,7 @@ class AudioEngine {
   // Master volume when unmuted. Intentionally restrained — ambient, not loud.
   private readonly vol = 0.42
   private readonly bedVol = 0.62
-  private readonly musicVol = 0.72
+  private readonly musicVol = 0.34
 
   /** Lazily build the graph. Returns null if Web Audio is unavailable. */
   private ensure(): AudioContext | null {
@@ -61,6 +61,15 @@ class AudioEngine {
     analyser.smoothingTimeConstant = 0.8
     master.connect(analyser)
     this.ctx = ctx
+    // Start the music the moment the context actually transitions to running.
+    // Browsers only grant audio "activation" on real gestures (click/tap/key) —
+    // scroll & wheel do NOT — so an early unlock() on scroll leaves the context
+    // suspended; this listener then fires music on the first qualifying gesture
+    // (a click ANYWHERE, not just the speaker), instead of silently committing a
+    // source while suspended.
+    ctx.onstatechange = () => {
+      if (ctx.state === 'running') void this.startMusic()
+    }
     this.master = master
     this.bedGain = bedGain
     this.cueGain = cueGain
@@ -99,7 +108,7 @@ class AudioEngine {
     const ctx = this.ctx
     if (!ctx) return null
     try {
-      const res = await fetch(withBase('/audio/entrance.mp3'))
+      const res = await fetch(withBase('/audio/entrance-spiring.mp3'))
       if (!res.ok) return null
       this.musicBuffer = await ctx.decodeAudioData(await res.arrayBuffer())
       return this.musicBuffer
@@ -113,8 +122,9 @@ class AudioEngine {
     if (this.musicStarted) return
     const ctx = this.ctx
     if (!ctx || !this.musicGain) return
+    if (ctx.state !== 'running') return // suspended → wait for onstatechange to retry
     const buffer = await this.loadMusic()
-    if (!buffer || this.musicStarted) return
+    if (!buffer || this.musicStarted || ctx.state !== 'running') return
     this.musicStarted = true
     const src = ctx.createBufferSource()
     src.buffer = buffer

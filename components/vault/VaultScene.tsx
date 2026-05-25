@@ -1,9 +1,9 @@
 'use client'
 
-import { useRef, useMemo, useLayoutEffect, Suspense } from 'react'
+import { useRef, useMemo, useEffect, useLayoutEffect, Suspense } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Environment, Lightformer, RoundedBox, useGLTF, useTexture, useVideoTexture } from '@react-three/drei'
-import { EffectComposer, Bloom, Vignette, ToneMapping } from '@react-three/postprocessing'
+import { EffectComposer, Bloom, Vignette, ToneMapping, N8AO } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import ModelOrFallback, { AssetErrorBoundary } from '@/components/three/ModelOrFallback'
@@ -22,18 +22,18 @@ const CAMERA_PATH = new THREE.CatmullRomCurve3([
   new THREE.Vector3(0, 1.8, 12),      // entrance, centred outside the door
   new THREE.Vector3(0, 1.55, 8.5),    // forward, centred — stable approach
   new THREE.Vector3(0, 1.32, 4.5),    // forward, centred
-  new THREE.Vector3(0, 1.38, 2.0),    // hero: shot at the shoe's height + pulled back, so we see the side profile (not the sole) and it isn't cut off
-  new THREE.Vector3(-0.25, 1.05, -3), // gentle drift left toward the drop feature
+  new THREE.Vector3(0, 1.22, 2.0),    // hero: low gaze UP at the floating shoe (venerated, side profile, pulled back) — dialed 1.16→1.22 so the gold plinth base stops dominating the lower frame
+  new THREE.Vector3(-0.65, 1.18, -2.0), // arc LEFT + stay near hero height, starting before z0 — so the camera passes BESIDE the floating shoe instead of plowing through it (was -0.25,1.05,-3 which flew straight through the shoe at z0). Also pre-aligns with the drop-feature look (x-0.8).
   new THREE.Vector3(0, 1.0, -6.5),    // re-centre, approach the counter (z=-8)
   new THREE.Vector3(0.2, 1.05, -9.5), // gentle drift right into the brand corridor
-  new THREE.Vector3(0, 1.1, -12),     // exit deeper down the hall
+  new THREE.Vector3(0, 1.1, -12),     // exit: stop just shy of the last totem (z-12.7); the enlarged+closer film carries the finale (pushing past it made the ON totem loom)
 ])
 
 const LOOK_PATH = new THREE.CatmullRomCurve3([
   new THREE.Vector3(0, 1.0, 6),       // look straight down the corridor
   new THREE.Vector3(0, 1.0, 3),
   new THREE.Vector3(0, 1.0, 0),
-  new THREE.Vector3(0, 1.26, -0.5),   // hero: look UP at the shoe's profile (raised from 1.05 — was looking under it at the sole)
+  new THREE.Vector3(0, 1.34, -0.5),   // hero: aim at the UPPER shoe so the low camera reads as a reverent upward gaze
   new THREE.Vector3(-0.8, 1.0, -5),   // soft glance left at the drop feature / Phase-2 ticker
   new THREE.Vector3(0, 0.82, -8),     // dip to the verification counter
   new THREE.Vector3(0, 1.0, -10.5),   // brand corridor
@@ -94,8 +94,8 @@ const graphiteMat = new THREE.MeshStandardMaterial({
 // edges catch the baked IBL and read as milled metal instead of a flat matte box.
 const machinedMat = new THREE.MeshStandardMaterial({
   color: '#2B2723',
-  roughness: 0.2,
-  metalness: 0.95,
+  roughness: 0.32,
+  metalness: 0.7,
 })
 // Smoked glass shelves — no transmission (see glassMat note). Used on ~18
 // surfaces, so a transmission pass here was a major per-frame cost on the Iris Xe.
@@ -116,11 +116,6 @@ const cardBaseMat = new THREE.MeshStandardMaterial({
   color: '#0E0D0C',
   roughness: 0.6,
   metalness: 0.3,
-})
-const creamPanelMat = new THREE.MeshStandardMaterial({
-  color: '#EDE7DA',
-  roughness: 0.5,
-  metalness: 0.0,
 })
 const mintMat = new THREE.MeshStandardMaterial({
   color: '#35E0A1',
@@ -170,7 +165,7 @@ function CeilingStrips() {
   return (
     <>
       {positions.map(([x, y, z], i) => (
-        <mesh key={i} position={[x, y, z]} material={stripMat}>
+        <mesh key={i} position={[x, y, z]} material={stripMat} frustumCulled={false}>
           <boxGeometry args={[0.06, 0.04, 26]} />
         </mesh>
       ))}
@@ -184,10 +179,10 @@ function WallStrips() {
     <>
       {zs.map((z, i) => (
         <group key={i}>
-          <mesh position={[-5.32, 1.6, z]} material={stripMat}>
+          <mesh position={[-5.32, 1.6, z]} material={stripMat} frustumCulled={false}>
             <boxGeometry args={[0.03, 2.4, 0.05]} />
           </mesh>
-          <mesh position={[5.32, 1.6, z]} material={stripMat}>
+          <mesh position={[5.32, 1.6, z]} material={stripMat} frustumCulled={false}>
             <boxGeometry args={[0.03, 2.4, 0.05]} />
           </mesh>
         </group>
@@ -281,7 +276,7 @@ function ShelfShoes() {
       const size = new THREE.Vector3()
       box.getSize(size)
       const maxDim = Math.max(size.x, size.y, size.z)
-      if (maxDim > 0) clone.scale.setScalar(0.42 / maxDim)
+      if (maxDim > 0) clone.scale.setScalar(0.52 / maxDim)
       const box2 = new THREE.Box3().setFromObject(clone)
       const center = new THREE.Vector3()
       box2.getCenter(center)
@@ -331,26 +326,81 @@ function ShelfShoes() {
   )
 }
 
-// Procedural premium authentication station + floating verification card.
-function AuthenticityCounter() {
-  const cardRef = useRef<THREE.Group>(null)
-  const sweepRef = useRef<THREE.Mesh>(null)
-  const clock = useRef(0)
+// ─── Cashier checkout screen ─────────────────────────────────────────────────
+// A real lit display above the authentication counter: an AI-generated (Nano
+// Banana → Kling 3.0) seamless loop of a luxury sneaker checkout — a contactless
+// tap on the terminal, the pair boxed on a brushed-metal counter. Replaces the
+// old abstract "verification card". Same gated video-texture pattern as the drop
+// wall / membership film.
+const CHECKOUT_W = 1.5
+const CHECKOUT_H = CHECKOUT_W * (9 / 16)
 
-  useFrame((_, delta) => {
-    clock.current += delta
-    const t = clock.current
-    if (cardRef.current) {
-      cardRef.current.rotation.y = t * 0.4 // slow rotation
-      cardRef.current.position.y = 1.35 + Math.sin(t * 1.2) * 0.05 // floats above the counter
+function CheckoutScreen({ active, scrollProgress }: { active: boolean; scrollProgress: React.MutableRefObject<number> }) {
+  // New cinematic checkout loop (Nano Banana 2 still → Cinema Studio 3.0 motion):
+  // a 720p, seamless start=end loop of a sneaker being bought at the vault counter
+  // (hands on the box, terminal reading APPROVED). start:false because we now
+  // BEAT-GATE playback — it runs only across the counter window and PAUSES before
+  // the heavy finale, so the membership film is the ONLY video decoding at the end
+  // of the walk (the checkout screen is behind the camera there anyway). That, plus
+  // 720p (was 1080p), is the finale-lag fix.
+  const tex = useVideoTexture(withBase('/video/checkout-cinematic.mp4'), {
+    start: false,
+    muted: true,
+    loop: true,
+    playsInline: true,
+  })
+  tex.colorSpace = THREE.SRGBColorSpace
+  const matRef = useRef<THREE.MeshBasicMaterial>(null)
+  const playing = useRef(false)
+
+  // Hard-pause when the vault is parked off-screen (fires even with the render
+  // loop frozen, so it still releases the decoder while the visitor shops below).
+  useEffect(() => {
+    const vid = tex.image as HTMLVideoElement | undefined
+    if (!vid) return
+    if (!active) { vid.pause(); playing.current = false }
+  }, [active, tex])
+
+  useFrame(() => {
+    const vid = tex.image as HTMLVideoElement | undefined
+    if (!vid || !matRef.current) return
+    // Counter sits at z=-8, in frame ~0.45–0.86 of the walk. Play (looping) across
+    // that window — alive a beat early so it's decoded on arrival — and pause
+    // outside it so two video textures never decode at once through the finale.
+    const p = scrollProgress.current
+    const shouldPlay = active && p > 0.45 && p < 0.86
+    if (shouldPlay && !playing.current) {
+      playing.current = true
+      vid.play().catch(() => {})
+    } else if (!shouldPlay && playing.current) {
+      playing.current = false
+      vid.pause()
     }
-    if (sweepRef.current) {
-      // Specular light sweep across the card face.
-      const m = sweepRef.current.material as THREE.MeshStandardMaterial
-      m.opacity = 0.15 + (Math.sin(t * 1.6) * 0.5 + 0.5) * 0.35
-    }
+    const ready = vid.readyState >= 2 && vid.videoWidth > 0
+    matRef.current.opacity += ((ready ? 1 : 0) - matRef.current.opacity) * 0.08
   })
 
+  return (
+    <mesh position={[0, 0, 0.014]}>
+      <planeGeometry args={[CHECKOUT_W, CHECKOUT_H]} />
+      <meshBasicMaterial ref={matRef} map={tex} toneMapped={false} transparent opacity={0} depthWrite={false} />
+    </mesh>
+  )
+}
+
+function CheckoutScreenPoster() {
+  const poster = useTexture(withBase('/video/checkout-cinematic.webp'))
+  poster.colorSpace = THREE.SRGBColorSpace
+  return (
+    <mesh position={[0, 0, 0.01]}>
+      <planeGeometry args={[CHECKOUT_W, CHECKOUT_H]} />
+      <meshBasicMaterial map={poster} toneMapped={false} />
+    </mesh>
+  )
+}
+
+// Procedural premium authentication station + the checkout screen above it.
+function AuthenticityCounter({ active, scrollProgress }: { active: boolean; scrollProgress: React.MutableRefObject<number> }) {
   return (
     <group position={[0, 0, -8]}>
       {/* Machined counter body — chamfered + brushed metal so it reads as milled
@@ -362,8 +412,7 @@ function AuthenticityCounter() {
         position={[0, 0.45, 0]}
         material={machinedMat}
       />
-      {/* Warm under-counter wash near the floor → reads as a lit, floating fixture
-          rather than a box on the ground. */}
+      {/* Warm under-counter wash near the floor → reads as a lit, floating fixture */}
       <mesh position={[0, 0.07, 0.36]} material={amberMat}>
         <boxGeometry args={[2.14, 0.012, 0.012]} />
       </mesh>
@@ -383,8 +432,7 @@ function AuthenticityCounter() {
       <mesh position={[0, 0.9, 0.46]} material={amberMat}>
         <boxGeometry args={[2.5, 0.02, 0.02]} />
       </mesh>
-      {/* Verification scan bar — mint tech glow across the counter top, the
-          self-lit signature that makes the station read as the focal point. */}
+      {/* Verification scan bar — mint tech glow across the counter top */}
       <mesh position={[0, 0.945, 0]} material={mintMat}>
         <boxGeometry args={[2.0, 0.014, 0.025]} />
       </mesh>
@@ -393,36 +441,28 @@ function AuthenticityCounter() {
         <boxGeometry args={[0.62, 0.015, 0.42]} />
       </mesh>
 
-      {/* Floating verification card — premium physical object */}
-      <group ref={cardRef} position={[0, 1.35, 0.2]} scale={1.5}>
-        {/* Soft backlight halo so the card reads as a glowing focal object.
-            NOTE: this must stay tone-mapped — `toneMapped={false}` bypassed ACES
-            and clipped the card to a white blob. Through ACES at 2.0 it glows
-            warmly and rolls off instead of blowing out. */}
-        <mesh position={[0, 0, -0.02]}>
-          <planeGeometry args={[0.56, 0.42]} />
-          <meshStandardMaterial color="#1A1714" emissive="#FFE0B0" emissiveIntensity={2.0} />
+      {/* The checkout display — a clean, frameless lit screen mounted above the
+          counter (clear of the centred headline), facing the approaching camera.
+          No white matte/bezel — just the footage + a thin mint verification edge. */}
+      <group position={[0, 2.0, 0.05]}>
+        {/* Mint verification edge — thin top + bottom rails, the only framing */}
+        <mesh position={[0, CHECKOUT_H / 2 + 0.018, 0.012]} material={mintMat}>
+          <boxGeometry args={[CHECKOUT_W, 0.009, 0.008]} />
         </mesh>
-        {/* Matte black base */}
-        <mesh material={cardBaseMat}>
-          <boxGeometry args={[0.42, 0.28, 0.02]} />
+        <mesh position={[0, -CHECKOUT_H / 2 - 0.018, 0.012]} material={mintMat}>
+          <boxGeometry args={[CHECKOUT_W, 0.009, 0.008]} />
         </mesh>
-        {/* Bone-white inset panel */}
-        <mesh position={[0, 0, 0.012]} material={creamPanelMat}>
-          <boxGeometry args={[0.34, 0.2, 0.004]} />
-        </mesh>
-        {/* Abstract checkmark from geometry (no text/QR/logo) */}
-        <mesh position={[-0.04, -0.015, 0.018]} rotation={[0, 0, -0.7]} material={mintMat}>
-          <boxGeometry args={[0.028, 0.085, 0.006]} />
-        </mesh>
-        <mesh position={[0.025, 0.02, 0.018]} rotation={[0, 0, 0.7]} material={mintMat}>
-          <boxGeometry args={[0.028, 0.16, 0.006]} />
-        </mesh>
-        {/* Specular sweep highlight */}
-        <mesh ref={sweepRef} position={[0.05, 0, 0.02]} rotation={[0, 0, 0.25]}>
-          <boxGeometry args={[0.05, 0.34, 0.002]} />
-          <meshStandardMaterial color="#FFFFFF" emissive="#FFFFFF" emissiveIntensity={1} transparent opacity={0.25} />
-        </mesh>
+        {/* Poster paints instantly; the video crossfades in once decoded */}
+        <AssetErrorBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <CheckoutScreenPoster />
+          </Suspense>
+        </AssetErrorBoundary>
+        <AssetErrorBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <CheckoutScreen active={active} scrollProgress={scrollProgress} />
+          </Suspense>
+        </AssetErrorBoundary>
       </group>
     </group>
   )
@@ -506,10 +546,10 @@ function HeroDisplay() {
       <spotLight
         position={[0, 3.7, 0.5]}
         target={spotTarget}
-        angle={0.34}
-        penumbra={0.8}
-        intensity={20}
-        distance={9}
+        angle={0.5}
+        penumbra={0.9}
+        intensity={16}
+        distance={12}
         decay={2}
         color="#FFF6EC"
         castShadow
@@ -518,6 +558,10 @@ function HeroDisplay() {
         shadow-camera-near={0.5}
         shadow-camera-far={10}
       />
+      {/* Cool rear rim — the ONE cool accent in an all-warm vault. Sits behind
+          the dark A.E.1 so its silhouette separates from the dark backdrop with a
+          thin icy edge (rim/kicker), instead of fake-brightening the dark shoe. */}
+      <pointLight position={[0, 1.45, -0.6]} intensity={7} color="#C4D6FF" distance={2.2} decay={2} />
       {/* Glowing ground halo on the platform (blooms under the shoe) */}
       <mesh ref={haloRef} position={[0, 1.045, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.34, 0.5, 64]} />
@@ -554,7 +598,7 @@ function HeroDisplay() {
       <group ref={shoeGroupRef} position={[0, 1.3, 0]}>
         <ModelOrFallback
           url={ASSETS.heroSneaker}
-          normalizeTo={0.92}
+          normalizeTo={1.05}
           seat="center"
           castShadow
           fallback={
@@ -781,12 +825,14 @@ function DropFeature({
 function BrandTotem({
   position,
   tex,
+  scale = 1,
 }: {
   position: [number, number, number]
   tex: THREE.Texture
+  scale?: number
 }) {
   return (
-    <group position={position}>
+    <group position={position} scale={scale}>
       {/* Floor base + slim brushed-metal pylon */}
       <mesh position={[0, 0.04, 0]} material={plinithMat}>
         <cylinderGeometry args={[0.3, 0.34, 0.08, 24]} />
@@ -796,18 +842,14 @@ function BrandTotem({
       <RoundedBox position={[0, 1.4, -0.02]} args={[1.72, 1.24, 0.06]} radius={0.035} smoothness={3} material={machinedMat} />
       {/* Dark, chamfered backing panel — keeps the cream mark popping */}
       <RoundedBox position={[0, 1.4, 0.02]} args={[1.6, 1.12, 0.04]} radius={0.03} smoothness={3} material={cardBaseMat} />
-      {/* Warm edge-light framing all four sides */}
+      {/* Warm edge-light, top + bottom only — the 4-side frame over-lit the
+          totem at close range (membership beat); a top/bottom rule reads as a
+          lit panel without blowing out. */}
       <mesh position={[0, 1.96, 0.05]} material={amberMat}>
-        <boxGeometry args={[1.6, 0.022, 0.01]} />
+        <boxGeometry args={[1.6, 0.018, 0.01]} />
       </mesh>
       <mesh position={[0, 0.84, 0.05]} material={amberMat}>
-        <boxGeometry args={[1.6, 0.022, 0.01]} />
-      </mesh>
-      <mesh position={[-0.81, 1.4, 0.05]} material={amberMat}>
-        <boxGeometry args={[0.022, 1.12, 0.01]} />
-      </mesh>
-      <mesh position={[0.81, 1.4, 0.05]} material={amberMat}>
-        <boxGeometry args={[0.022, 1.12, 0.01]} />
+        <boxGeometry args={[1.6, 0.018, 0.01]} />
       </mesh>
       {/* The mark — emissive cream logo, reads without external light */}
       <mesh position={[0, 1.4, 0.06]}>
@@ -835,10 +877,13 @@ function BrandCorridor() {
   for (const t of [nike, adidas, puma, on]) t.colorSpace = THREE.SRGBColorSpace
   return (
     <>
-      <BrandTotem position={[-1.5, 0, -10.0]} tex={nike} />
-      <BrandTotem position={[1.5, 0, -10.9]} tex={adidas} />
-      <BrandTotem position={[-1.5, 0, -11.8]} tex={puma} />
-      <BrandTotem position={[1.5, 0, -12.7]} tex={on} />
+      {/* Scale builds 0.9→1.2 with depth: the far totems are physically larger so
+          they hold presence against perspective shrink — the corridor escalates
+          toward the membership reveal instead of reading as four equal signs. */}
+      <BrandTotem position={[-1.5, 0, -10.0]} tex={nike} scale={0.9} />
+      <BrandTotem position={[1.5, 0, -10.9]} tex={adidas} scale={1.0} />
+      <BrandTotem position={[-1.5, 0, -11.8]} tex={puma} scale={1.1} />
+      <BrandTotem position={[1.5, 0, -12.7]} tex={on} scale={1.2} />
     </>
   )
 }
@@ -856,10 +901,10 @@ function BrandCorridor() {
 // the centred "Join the Collective" headline reads clean over black). Resolves
 // the closing beat and gives the brand corridor a warm focal point at the hall's
 // end. Replaces the old flat exit glow (and the rejected Cairo-skyline film).
-const FILM_W = 4.4
+const FILM_W = 5.2
 const FILM_H = FILM_W * (9 / 16)
-const FILM_Z = -17.78
-const FILM_Y = 1.66
+const FILM_Z = -14.6
+const FILM_Y = 1.6
 
 function MembershipFilm({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
   const tex = useVideoTexture(withBase('/video/ae1-collective.mp4'), {
@@ -948,7 +993,7 @@ function MembershipFilmWall({ scrollProgress }: { scrollProgress: React.MutableR
 // Slow-drifting dust motes catching the LED light — depth + life in the volume.
 // ~320 additive points on a soft round sprite, recycled upward. Cheap (one draw
 // call, a tiny per-frame y-bump) so it runs on both quality tiers.
-function VaultParticles({ count = 320 }: { count?: number }) {
+function VaultParticles({ count = 680 }: { count?: number }) {
   const ref = useRef<THREE.Points>(null)
   const { positions, texture } = useMemo(() => {
     const positions = new Float32Array(count * 3)
@@ -973,7 +1018,10 @@ function VaultParticles({ count = 320 }: { count?: number }) {
     if (!pts) return
     const arr = pts.geometry.attributes.position.array as Float32Array
     for (let i = 0; i < count; i++) {
-      arr[i * 3 + 1] += delta * 0.06
+      arr[i * 3 + 1] += delta * 0.05
+      // gentle Brownian lateral wander so the motes read as real air, not a flat layer
+      arr[i * 3 + 0] += (Math.random() - 0.5) * 0.003
+      arr[i * 3 + 2] += (Math.random() - 0.5) * 0.003
       if (arr[i * 3 + 1] > 3.4) arr[i * 3 + 1] = 0
     }
     pts.geometry.attributes.position.needsUpdate = true
@@ -985,10 +1033,10 @@ function VaultParticles({ count = 320 }: { count?: number }) {
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <pointsMaterial
-        size={0.045}
+        size={0.05}
         map={texture}
         transparent
-        opacity={0.18}
+        opacity={0.22}
         depthWrite={false}
         blending={THREE.AdditiveBlending}
         sizeAttenuation
@@ -1001,17 +1049,37 @@ export type QualityTier = 'high' | 'low'
 
 interface VaultSceneProps {
   scrollProgress: React.MutableRefObject<number>
+  // Mirrors the canvas frameloop gate. When false the vault is parked off-screen
+  // (user is shopping below) — we pause the heavy checkout video decode.
+  active: boolean
 }
 
 // The scene renders identically on both tiers (IBL + emissive + glossy floor);
 // the quality ladder lives in VaultCanvas as DPR scaling.
-export default function VaultScene({ scrollProgress }: VaultSceneProps) {
+export default function VaultScene({ scrollProgress, active }: VaultSceneProps) {
   const cameraTarget = useMemo(() => new THREE.Vector3(), [])
   const cameraPos = useMemo(() => new THREE.Vector3(), [])
   const lookTarget = useMemo(() => new THREE.Vector3(), [])
   const prevProgress = useRef(0)
+  const shadowReady = useRef(false)
+  const shadowTick = useRef(0)
 
   useFrame((state, delta) => {
+    // Shadow throttle: the ONLY moving shadow caster is the slow hero turntable
+    // (≈0.25 rad/s + a ±0.03 bob), so the spotlight's shadow map doesn't need a
+    // fresh render every frame. Take manual control and refresh it every 2nd
+    // frame — halves the shadow depth pass with no visible change (the shadow
+    // lagging ~16ms behind a slow turntable is imperceptible). Every-2nd only:
+    // pushing to 3rd/4th would let the bob's shadow visibly judder.
+    if (!shadowReady.current) {
+      shadowReady.current = true
+      state.gl.shadowMap.autoUpdate = false
+      state.gl.shadowMap.needsUpdate = true // seed the initial shadow once
+    } else {
+      shadowTick.current++
+      state.gl.shadowMap.needsUpdate = shadowTick.current % 2 === 0
+    }
+
     const p = Math.max(0, Math.min(1, scrollProgress.current))
 
     // Per-frame scroll delta — gate parallax during fast scroll so the camera
@@ -1099,7 +1167,7 @@ export default function VaultScene({ scrollProgress }: VaultSceneProps) {
           lightformers + emissive signs) for a luxury-showroom reflection WITHOUT
           the per-frame full-scene re-render the old MeshReflectorMaterial forced
           — that second render every frame on scroll was the main FPS killer. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -5]} material={floorMat}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -5]} material={floorMat} receiveShadow>
         <planeGeometry args={[12, 36]} />
       </mesh>
 
@@ -1150,7 +1218,7 @@ export default function VaultScene({ scrollProgress }: VaultSceneProps) {
       <DropFeature scrollProgress={scrollProgress} />
 
       {/* Authenticity counter */}
-      <AuthenticityCounter />
+      <AuthenticityCounter active={active} scrollProgress={scrollProgress} />
 
       {/* Shoebox stacks flanking the counter (moved with it to z≈-8) */}
       <ShoeboxStack position={[-1.6, 0, -7.9]} />
@@ -1172,10 +1240,19 @@ export default function VaultScene({ scrollProgress }: VaultSceneProps) {
           filmic highlight rolloff (premium, and it tames blowouts gracefully
           instead of clipping to white). Vignette focuses the frame. */}
       <EffectComposer multisampling={0}>
+        {/* N8AO — screen-space ambient occlusion. Darkens contact seams (counter↔
+            floor, box stacks, plinth base, door reveals) so flat-lit surfaces stop
+            reading as "painted." Runs before Bloom so AO darkening doesn't get
+            bloomed away. halfRes computes the AO at half resolution (2–4× cheaper —
+            the single biggest GPU win here, since AO is the heaviest pass) and
+            depthAwareUpsampling re-sharpens it along depth edges, so the result is
+            visually near-identical to full-res (AO is low-frequency). Samples /
+            radius / intensity unchanged → the LOOK is the same, the cost is not. */}
+        <N8AO aoSamples={16} aoRadius={0.4} intensity={1.3} distanceFalloff={1} color="#000000" halfRes depthAwareUpsampling />
         <Bloom
           mipmapBlur
           intensity={0.58}
-          luminanceThreshold={0.82}
+          luminanceThreshold={0.8}
           luminanceSmoothing={0.3}
         />
         <Vignette offset={0.32} darkness={0.62} />

@@ -32,7 +32,10 @@ const scenes: Scene[] = [
         <div className="flex flex-col sm:flex-row gap-3 mt-2">
           <button
             type="button"
-            onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
+            onClick={() => {
+              audioEngine.unlock() // a real click → reliably starts the music
+              window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })
+            }}
             className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm cursor-pointer"
           >
             Enter the Vault
@@ -155,7 +158,7 @@ const scenes: Scene[] = [
   },
   {
     id: 'membership',
-    from: 0.92,
+    from: 0.93,
     to: 1.0,
     content: (
       <div className="flex flex-col items-center text-center gap-5">
@@ -164,7 +167,7 @@ const scenes: Scene[] = [
           Join the Collective.
         </h2>
         <p className="text-sm text-vault-cream/70 max-w-xs leading-relaxed">
-          Early drops. Member offers. Cairo&apos;s sneakerhead community.
+          Early drops. Authenticated pairs. Cairo&apos;s sneakerhead home.
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
@@ -246,7 +249,6 @@ function AuthScene({ scrollProgress }: { scrollProgress: React.MutableRefObject<
       style={{ willChange: 'opacity' }}
     >
       <div className="vault-scrim" />
-      <div className={`vault-authscan${stage >= 1 ? ' vault-authscan--run' : ''}`} />
       <div className="pointer-events-auto vault-copy w-full" style={{ willChange: 'transform' }}>
         <div className="flex flex-col items-center text-center gap-5">
           <div className="flex items-center gap-2">

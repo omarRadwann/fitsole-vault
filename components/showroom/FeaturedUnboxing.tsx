@@ -37,7 +37,7 @@ export default function FeaturedUnboxing() {
   return (
     <section
       ref={sectionRef}
-      className="relative py-24 sm:py-32 px-6 lg:px-8 overflow-hidden border-t border-vault-border"
+      className="relative py-10 sm:py-14 px-6 lg:px-8 overflow-hidden"
     >
       <div className="max-w-7xl mx-auto">
         <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/70 mb-10">
