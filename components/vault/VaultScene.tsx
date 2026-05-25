@@ -336,14 +336,15 @@ const CHECKOUT_W = 1.5
 const CHECKOUT_H = CHECKOUT_W * (9 / 16)
 
 function CheckoutScreen({ active, scrollProgress }: { active: boolean; scrollProgress: React.MutableRefObject<number> }) {
-  // New cinematic checkout loop (Nano Banana 2 still → Cinema Studio 3.0 motion):
-  // a 720p, seamless start=end loop of a sneaker being bought at the vault counter
-  // (hands on the box, terminal reading APPROVED). start:false because we now
-  // BEAT-GATE playback — it runs only across the counter window and PAUSES before
-  // the heavy finale, so the membership film is the ONLY video decoding at the end
-  // of the walk (the checkout screen is behind the camera there anyway). That, plus
-  // 720p (was 1080p), is the finale-lag fix.
-  const tex = useVideoTexture(withBase('/video/checkout-cinematic.mp4'), {
+  // Cinematic checkout loop on the counter display. BEAT-GATED to the counter
+  // window (≈0.45–0.86) so only ONE video decodes through the heavy finale (the
+  // checkout screen is behind the camera there anyway). A mint verification scan
+  // bar sweeps the screen the whole time it's lit, so the moment never reads as a
+  // frozen still even when the footage itself is calm; and on the AuthScene
+  // "verified" beat (the UV badge / chime, ~p0.71) the bar settles to centre and
+  // flashes once — the cashier is the FULFILMENT of the verification sequence:
+  // verify → approve → buy. One scan system, two stages.
+  const tex = useVideoTexture(withBase('/video/ae1-checkout.mp4'), {
     start: false,
     muted: true,
     loop: true,
@@ -351,19 +352,32 @@ function CheckoutScreen({ active, scrollProgress }: { active: boolean; scrollPro
   })
   tex.colorSpace = THREE.SRGBColorSpace
   const matRef = useRef<THREE.MeshBasicMaterial>(null)
+  const scanRef = useRef<THREE.Mesh>(null)
+  const scanMatRef = useRef<THREE.MeshBasicMaterial>(null)
   const playing = useRef(false)
+  const clock = useRef(0)
+  const approvedAt = useRef(-10)
 
   // Hard-pause when the vault is parked off-screen (fires even with the render
   // loop frozen, so it still releases the decoder while the visitor shops below).
   useEffect(() => {
     const vid = tex.image as HTMLVideoElement | undefined
-    if (!vid) return
-    if (!active) { vid.pause(); playing.current = false }
+    if (vid && !active) { vid.pause(); playing.current = false }
   }, [active, tex])
 
-  useFrame(() => {
+  // Fire the "APPROVED" flash off AuthScene's UV badge — decoupled via a window
+  // event so the 3D screen and the DOM badges stay in lockstep without
+  // prop-drilling a shared ref through VaultExperience.
+  useEffect(() => {
+    const onVerified = () => { approvedAt.current = clock.current }
+    window.addEventListener('fitsole:verified', onVerified)
+    return () => window.removeEventListener('fitsole:verified', onVerified)
+  }, [])
+
+  useFrame((_, delta) => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid || !matRef.current) return
+    clock.current += delta
     // Counter sits at z=-8, in frame ~0.45–0.86 of the walk. Play (looping) across
     // that window — alive a beat early so it's decoded on arrival — and pause
     // outside it so two video textures never decode at once through the finale.
@@ -378,18 +392,45 @@ function CheckoutScreen({ active, scrollProgress }: { active: boolean; scrollPro
     }
     const ready = vid.readyState >= 2 && vid.videoWidth > 0
     matRef.current.opacity += ((ready ? 1 : 0) - matRef.current.opacity) * 0.08
+
+    // Verification scan bar: sweeps top→bottom while the screen is lit; on the
+    // approve beat it settles to centre, brightens, and blooms briefly.
+    if (scanRef.current && scanMatRef.current) {
+      const lit = shouldPlay && ready
+      const sweep = (clock.current % 2.6) / 2.6 // 0→1 sawtooth, ~2.6s per pass
+      const sweepY = CHECKOUT_H / 2 - sweep * CHECKOUT_H
+      const flash = Math.max(0, 1 - (clock.current - approvedAt.current) / 1.2) // 1→0 over 1.2s
+      scanRef.current.position.y = sweepY * (1 - flash) // settle to centre as it flashes
+      scanRef.current.scale.y = 1 + flash * 7 // brief vertical bloom on approve
+      scanMatRef.current.opacity = (lit ? 0.22 : 0) + flash * 0.65
+    }
   })
 
   return (
-    <mesh position={[0, 0, 0.014]}>
-      <planeGeometry args={[CHECKOUT_W, CHECKOUT_H]} />
-      <meshBasicMaterial ref={matRef} map={tex} toneMapped={false} transparent opacity={0} depthWrite={false} />
-    </mesh>
+    <group>
+      <mesh position={[0, 0, 0.014]}>
+        <planeGeometry args={[CHECKOUT_W, CHECKOUT_H]} />
+        <meshBasicMaterial ref={matRef} map={tex} toneMapped={false} transparent opacity={0} depthWrite={false} />
+      </mesh>
+      {/* Mint verification scan bar — additive so it reads as projected light. */}
+      <mesh ref={scanRef} position={[0, 0, 0.02]}>
+        <planeGeometry args={[CHECKOUT_W * 0.99, 0.014]} />
+        <meshBasicMaterial
+          ref={scanMatRef}
+          color="#35E0A1"
+          transparent
+          opacity={0}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
   )
 }
 
 function CheckoutScreenPoster() {
-  const poster = useTexture(withBase('/video/checkout-cinematic.webp'))
+  const poster = useTexture(withBase('/video/ae1-checkout.webp'))
   poster.colorSpace = THREE.SRGBColorSpace
   return (
     <mesh position={[0, 0, 0.01]}>

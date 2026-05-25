@@ -221,6 +221,9 @@ function AuthScene({ scrollProgress }: { scrollProgress: React.MutableRefObject<
           window.setTimeout(() => {
             setStage(4) // UV ✓
             audioEngine.playCue('chime')
+            // Tell the 3D cashier screen to flash APPROVED in lockstep — the
+            // checkout is the fulfilment of this verification beat.
+            window.dispatchEvent(new Event('fitsole:verified'))
           }, 1240),
           window.setTimeout(() => setStage(5), 1640) // brass plaque inscribes
         )
