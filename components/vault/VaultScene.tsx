@@ -341,7 +341,7 @@ const CHECKOUT_H = CHECKOUT_W * (9 / 16)
 // screen is behind the camera there anyway). Skipped entirely on SAFE; the poster
 // carries the screen and the scan bar (below) keeps it alive.
 function CashierVideo({ active, scrollProgress }: { active: boolean; scrollProgress: React.MutableRefObject<number> }) {
-  const tex = useVideoTexture(withBase('/video/ae1-checkout.mp4'), {
+  const tex = useVideoTexture(withBase('/video/ae1-authenticate.mp4'), {
     start: false,
     muted: true,
     loop: true,
@@ -432,7 +432,7 @@ function CashierScanBar({ scrollProgress }: { scrollProgress: React.MutableRefOb
 }
 
 function CheckoutScreenPoster() {
-  const poster = useTexture(withBase('/video/ae1-checkout.webp'))
+  const poster = useTexture(withBase('/video/ae1-authenticate.webp'))
   poster.colorSpace = THREE.SRGBColorSpace
   return (
     <mesh position={[0, 0, 0.01]}>
