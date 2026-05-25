@@ -3,7 +3,15 @@
 import { Canvas } from '@react-three/fiber'
 import { PerformanceMonitor, Stats } from '@react-three/drei'
 import { Suspense, useEffect, useMemo, useState } from 'react'
-import VaultScene, { type QualityTier } from './VaultScene'
+import VaultScene from './VaultScene'
+import {
+  type QualityTier,
+  initialTier,
+  clampDpr,
+  readGpuRenderer,
+  tierFromGpu,
+  readForcedTier,
+} from '@/lib/deviceTier'
 
 interface VaultCanvasProps {
   scrollProgress: React.MutableRefObject<number>
@@ -21,47 +29,44 @@ function LoadingFallback() {
   )
 }
 
-// Optional ?tier=high|low override (SSR-safe). When present it PINS the quality
-// tier so the owner can A/B the expensive tier-gated extras (reflective floor +
-// accent lights) on a real device without PerformanceMonitor flipping the tier
-// mid-measurement. Returns null when unset/invalid → normal adaptive behaviour.
-function readForcedTier(): QualityTier | null {
-  if (typeof window === 'undefined') return null
-  const t = new URLSearchParams(window.location.search).get('tier')
-  return t === 'high' || t === 'low' ? t : null
-}
-
 export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps) {
-  // A ?tier= override pins the tier for measurement; otherwise it adapts.
+  // ?tier=high|standard|safe PINS the tier (no auto-change) so the owner can
+  // measure a specific tier on a real device.
   const forcedTier = useMemo(readForcedTier, [])
 
-  // Adaptive resolution: start near-crisp, let PerformanceMonitor scale it.
-  const [dpr, setDpr] = useState(1.1)
-  // Quality tier drives the expensive-but-pretty extras (reflective floor,
-  // accent lights). Starts 'high' (or the forced value); degrades ONE WAY on a
-  // weak GPU so capable devices keep the brilliant look while weak ones stay
-  // smooth — no oscillation. A forced tier never auto-degrades.
-  const [tier, setTier] = useState<QualityTier>(() => forcedTier ?? 'high')
+  // Conservative boot guess (mostly STANDARD). The real GPU string — read in
+  // onCreated before the preloader opens — lifts it to HIGH (discrete / Apple
+  // GPU) or drops it to SAFE (Intel iGPU / software rasterizer), so there's no
+  // visible pop. After that it only ever degrades (PerformanceMonitor, one-way).
+  const [tier, setTier] = useState<QualityTier>(() => forcedTier ?? initialTier())
+  const [gpu, setGpu] = useState('')
 
-  // Gate the dev overlay behind mount so the ?fps/?tier DOM (read from the URL,
-  // client-only) doesn't cause a hydration mismatch with the server markup.
+  // DPR is DERIVED from the tier — clamped to [1.0, cap]. It never drops below 1.0:
+  // the old PerformanceMonitor 0.6 floor is exactly what made weak laptops blurry.
+  // The cap only bites on hi-dpi screens; a 1.0-dpr laptop stays crisp on every
+  // tier and the EFFECT cuts (N8AO/bloom/particles/shadows) do the perf work.
+  const dpr = useMemo(() => clampDpr(tier), [tier])
+
+  // Gate dev overlays behind mount so URL-derived (client-only) DOM doesn't cause
+  // a hydration mismatch with the server markup.
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+  const showStats = mounted && new URLSearchParams(window.location.search).has('fps')
 
-  // Dev-only on-screen readout — append ?fps to the URL. The tier+dpr label
-  // makes "measure each optimisation" possible: the owner sees which tier is
-  // live and the current resolution scale on their own device.
-  const showStats =
-    mounted && new URLSearchParams(window.location.search).has('fps')
+  // One-way degrade. The action is "drop a tier" (cut the expensive effects FIRST,
+  // per briefing §6.2) — not "crush DPR." Resolution stays native; the look
+  // simplifies. A capable device that dips once never oscillates back up.
+  const degrade = () => setTier((t) => (t === 'high' ? 'standard' : 'safe'))
 
   return (
     <>
       <Canvas
         flat
-        // Render only while the vault is on-screen. Parked ("never") when the
-        // user scrolls into the flat shop below or hides the tab, so the heavy
-        // scene stops costing GPU. Flips back to "always" on scroll-back —
-        // R3F reacts to the prop and resumes the loop (and all useFrame anims).
+        // Render only while the vault is on-screen. Parked ("never") when the user
+        // scrolls into the flat shop below or hides the tab, so the heavy scene
+        // stops costing GPU. Flips back to "always" on scroll-back. "always" (not
+        // "demand") is REQUIRED: the turntable, particles and audio-reactive
+        // emissives animate continuously — there is no static frame to hold.
         frameloop={active ? 'always' : 'never'}
         camera={{ position: [0, 1.8, 12], fov: 55, near: 0.1, far: 60 }}
         dpr={dpr}
@@ -70,26 +75,29 @@ export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps
           alpha: false,
           powerPreference: 'high-performance',
         }}
-        shadows="percentage"
+        // Shadows off on SAFE (set at boot for weak GPUs → no shadow pass at all).
+        shadows={tier === 'safe' ? false : 'percentage'}
         style={{ background: '#0C0B0A' }}
         aria-hidden="true"
+        onCreated={({ gl }) => {
+          const renderer = readGpuRenderer(gl.getContext())
+          setGpu(renderer)
+          // GPU string is the most reliable capability signal — it catches the
+          // classic "gaming laptop running on the Intel iGPU" case → SAFE.
+          if (!forcedTier) {
+            const hint = tierFromGpu(renderer)
+            if (hint) setTier(hint)
+          }
+        }}
       >
         <PerformanceMonitor
           flipflops={3}
-          onIncline={() => setDpr(1.15)}
-          onDecline={() => {
-            setDpr(0.85)
-            if (!forcedTier) setTier('low')
-          }}
-          onFallback={() => {
-            // Weak-GPU floor: drop to 0.6 DPR (was 0.7) for a bit more headroom.
-            setDpr(0.6)
-            if (!forcedTier) setTier('low')
-          }}
+          onDecline={() => { if (!forcedTier) degrade() }}
+          onFallback={() => { if (!forcedTier) setTier('safe') }}
         />
         {showStats && <Stats />}
         <Suspense fallback={<LoadingFallback />}>
-          <VaultScene scrollProgress={scrollProgress} active={active} />
+          <VaultScene scrollProgress={scrollProgress} active={active} tier={tier} />
         </Suspense>
       </Canvas>
       {showStats && (
@@ -105,10 +113,12 @@ export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps
             font: '11px/1.4 monospace',
             pointerEvents: 'none',
             whiteSpace: 'nowrap',
+            maxWidth: '60vw',
           }}
         >
-          tier:{tier} dpr:{dpr.toFixed(2)}
-          {forcedTier ? ' (forced)' : ''}
+          tier:{tier}{forcedTier ? ' (forced)' : ''} dpr:{dpr.toFixed(2)}
+          <br />
+          gpu:{gpu || '—'}
         </div>
       )}
     </>

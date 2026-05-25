@@ -9,6 +9,7 @@ import * as THREE from 'three'
 import ModelOrFallback, { AssetErrorBoundary } from '@/components/three/ModelOrFallback'
 import { ASSETS, SHELF_SNEAKERS } from '@/lib/assets'
 import { withBase } from '@/lib/basePath'
+import type { QualityTier } from '@/lib/deviceTier'
 import { audioEngine } from '@/lib/audioEngine'
 
 // A smooth, confident walk straight down the CENTRE of the store. The corridor
@@ -441,7 +442,7 @@ function CheckoutScreenPoster() {
 }
 
 // Procedural premium authentication station + the checkout screen above it.
-function AuthenticityCounter({ active, scrollProgress }: { active: boolean; scrollProgress: React.MutableRefObject<number> }) {
+function AuthenticityCounter({ active, scrollProgress, tier }: { active: boolean; scrollProgress: React.MutableRefObject<number>; tier: QualityTier }) {
   return (
     <group position={[0, 0, -8]}>
       {/* Machined counter body — chamfered + brushed metal so it reads as milled
@@ -499,11 +500,14 @@ function AuthenticityCounter({ active, scrollProgress }: { active: boolean; scro
             <CheckoutScreenPoster />
           </Suspense>
         </AssetErrorBoundary>
-        <AssetErrorBoundary fallback={null}>
-          <Suspense fallback={null}>
-            <CheckoutScreen active={active} scrollProgress={scrollProgress} />
-          </Suspense>
-        </AssetErrorBoundary>
+        {/* Video only above SAFE — SAFE shows the poster (above) to save decode. */}
+        {tier !== 'safe' && (
+          <AssetErrorBoundary fallback={null}>
+            <Suspense fallback={null}>
+              <CheckoutScreen active={active} scrollProgress={scrollProgress} />
+            </Suspense>
+          </AssetErrorBoundary>
+        )}
       </group>
     </group>
   )
@@ -824,8 +828,10 @@ function PosterScreen() {
 
 function DropFeature({
   scrollProgress,
+  tier,
 }: {
   scrollProgress: React.MutableRefObject<number>
+  tier: QualityTier
 }) {
   // Yawed toward the centre aisle so the screen faces the glancing camera. Bezel
   // + poster always render; the video has its OWN boundary so a stalled / 503'd
@@ -850,9 +856,11 @@ function DropFeature({
       <Suspense fallback={null}>
         <PosterScreen />
       </Suspense>
-      <Suspense fallback={null}>
-        <VaultVideoScreen scrollProgress={scrollProgress} />
-      </Suspense>
+      {tier !== 'safe' && (
+        <Suspense fallback={null}>
+          <VaultVideoScreen scrollProgress={scrollProgress} />
+        </Suspense>
+      )}
     </group>
   )
 }
@@ -1002,7 +1010,7 @@ function MembershipFilmPoster() {
   )
 }
 
-function MembershipFilmWall({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+function MembershipFilmWall({ scrollProgress, tier }: { scrollProgress: React.MutableRefObject<number>; tier: QualityTier }) {
   return (
     <group>
       {/* Graphite frame + warm gold edge accents */}
@@ -1022,11 +1030,13 @@ function MembershipFilmWall({ scrollProgress }: { scrollProgress: React.MutableR
           <MembershipFilmPoster />
         </Suspense>
       </AssetErrorBoundary>
-      <AssetErrorBoundary fallback={null}>
-        <Suspense fallback={null}>
-          <MembershipFilm scrollProgress={scrollProgress} />
-        </Suspense>
-      </AssetErrorBoundary>
+      {tier !== 'safe' && (
+        <AssetErrorBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <MembershipFilm scrollProgress={scrollProgress} />
+          </Suspense>
+        </AssetErrorBoundary>
+      )}
     </group>
   )
 }
@@ -1086,18 +1096,20 @@ function VaultParticles({ count = 680 }: { count?: number }) {
   )
 }
 
-export type QualityTier = 'high' | 'low'
-
 interface VaultSceneProps {
   scrollProgress: React.MutableRefObject<number>
   // Mirrors the canvas frameloop gate. When false the vault is parked off-screen
   // (user is shopping below) — we pause the heavy checkout video decode.
   active: boolean
+  // Quality tier. Camera, models and composition are IDENTICAL on every tier; only
+  // the per-frame COST scales — postprocessing (N8AO/Bloom), particle count,
+  // env-map resolution, shadows (off at the Canvas on safe) and video decode —
+  // plus the DPR cap in VaultCanvas. 'safe' is the crisp-but-cheap floor for weak
+  // GPUs: native DPR (never blurry), no SSAO/bloom/particles/shadows, poster-only video.
+  tier: QualityTier
 }
 
-// The scene renders identically on both tiers (IBL + emissive + glossy floor);
-// the quality ladder lives in VaultCanvas as DPR scaling.
-export default function VaultScene({ scrollProgress, active }: VaultSceneProps) {
+export default function VaultScene({ scrollProgress, active, tier }: VaultSceneProps) {
   const cameraTarget = useMemo(() => new THREE.Vector3(), [])
   const cameraPos = useMemo(() => new THREE.Vector3(), [])
   const lookTarget = useMemo(() => new THREE.Vector3(), [])
@@ -1187,7 +1199,7 @@ export default function VaultScene({ scrollProgress, active }: VaultSceneProps) 
           cost. resolution 512 = cleaner reflections; the back-corridor formers
           keep the deep end (brands / membership) lit now that the real corridor
           fill lights are gone. NEVER raise frames — that re-bakes every frame. */}
-      <Environment resolution={512} frames={1}>
+      <Environment resolution={tier === 'high' ? 1024 : tier === 'standard' ? 512 : 256} frames={1}>
         <Lightformer intensity={2.2} color="#FFB366" position={[0, 5, -4]} scale={[12, 1.5, 1]} />
         <Lightformer intensity={1.4} color="#FFF4E0" position={[0, 5, -9]} scale={[8, 1, 1]} />
         <Lightformer intensity={1} color="#6E8AB8" position={[0, 3, 13]} scale={[10, 4, 1]} />
@@ -1276,10 +1288,10 @@ export default function VaultScene({ scrollProgress, active }: VaultSceneProps) 
       </AssetErrorBoundary>
 
       {/* Drop-wall video display (the "New Drops" focal element) */}
-      <DropFeature scrollProgress={scrollProgress} />
+      <DropFeature scrollProgress={scrollProgress} tier={tier} />
 
       {/* Authenticity counter */}
-      <AuthenticityCounter active={active} scrollProgress={scrollProgress} />
+      <AuthenticityCounter active={active} scrollProgress={scrollProgress} tier={tier} />
 
       {/* Shoebox stacks flanking the counter (moved with it to z≈-8) */}
       <ShoeboxStack position={[-1.6, 0, -7.9]} />
@@ -1290,41 +1302,44 @@ export default function VaultScene({ scrollProgress, active }: VaultSceneProps) 
 
       {/* Membership film wall — the golden-hour Cairo skyline that resolves the
           closing "Join the Collective" beat (a window to the city). */}
-      <MembershipFilmWall scrollProgress={scrollProgress} />
+      <MembershipFilmWall scrollProgress={scrollProgress} tier={tier} />
 
-      {/* Drifting dust motes */}
-      <VaultParticles />
+      {/* Drifting dust motes — full on high, halved on standard, off on safe. */}
+      {tier !== 'safe' && <VaultParticles count={tier === 'high' ? 680 : 360} />}
 
       {/* Cinematic post. The Canvas renders linear HDR (flat), bloom blooms only
           the brightest emissives in HDR, then ToneMapping (ACES Filmic) maps the
           frame to display ONCE at the end — giving every emissive + reflection a
           filmic highlight rolloff (premium, and it tames blowouts gracefully
           instead of clipping to white). Vignette focuses the frame. */}
+      {/* Effects are built as a FILTERED ARRAY (not conditional JSX children) so
+          the tier gates type-check against EffectComposer's strict Element children
+          and React.Children cleanly rebuilds the pass when a tier flip adds/removes
+          an effect — no composer remount, no black flash. */}
       <EffectComposer multisampling={0}>
-        {/* N8AO — screen-space ambient occlusion. Darkens contact seams (counter↔
-            floor, box stacks, plinth base, door reveals) so flat-lit surfaces stop
-            reading as "painted." Runs before Bloom so AO darkening doesn't get
-            bloomed away. halfRes computes the AO at half resolution (2–4× cheaper —
-            the single biggest GPU win here, since AO is the heaviest pass) and
-            depthAwareUpsampling re-sharpens it along depth edges, so the result is
-            visually near-identical to full-res (AO is low-frequency). Samples /
-            radius / intensity unchanged → the LOOK is the same, the cost is not. */}
-        <N8AO aoSamples={16} aoRadius={0.4} intensity={1.3} distanceFalloff={1} color="#000000" halfRes depthAwareUpsampling />
-        <Bloom
-          mipmapBlur
-          intensity={0.58}
-          luminanceThreshold={0.8}
-          luminanceSmoothing={0.3}
-        />
-        <Vignette offset={0.32} darkness={0.62} />
-        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-        {/* Edge AA on the FINAL tonemapped frame. The composer renders to an
-            intermediate buffer (multisampling=0), so the context-level
-            antialias:true never reaches the composited output — without this the
-            bright LED strips, brass chamfers and glossy floor reflections crawl
-            and shimmer as the camera dollies. SMAA (cheap, mobile-safe) runs last
-            so it AAs the LDR result, not the linear-HDR pre-tonemap values. */}
-        <SMAA />
+        {([
+          // N8AO — screen-space AO, the HEAVIEST pass (halfRes still costs the most
+          // here). HIGH only: standard/safe drop it so the weak-GPU budget buys a
+          // crisp native-DPR frame, not a blurry one. Before Bloom so its
+          // contact-seam darkening isn't bloomed away.
+          tier === 'high' ? (
+            <N8AO key="n8ao" aoSamples={16} aoRadius={0.4} intensity={1.3} distanceFalloff={1} color="#000000" halfRes depthAwareUpsampling />
+          ) : null,
+          // Bloom on high + standard; dropped on safe (emissives still read via the
+          // ACES tonemap below — they just lose the soft halo).
+          tier !== 'safe' ? (
+            <Bloom key="bloom" mipmapBlur intensity={0.58} luminanceThreshold={0.8} luminanceSmoothing={0.3} />
+          ) : null,
+          <Vignette key="vignette" offset={0.32} darkness={0.62} />,
+          // ACES tonemap maps linear HDR → display ONCE at the end. The Canvas is
+          // `flat`, so this is the ONLY tonemap — kept on EVERY tier or colour breaks.
+          <ToneMapping key="tonemap" mode={ToneMappingMode.ACES_FILMIC} />,
+          // Edge AA on the final tonemapped frame. multisampling=0 means the context
+          // antialias never reaches the composited output; without SMAA the bright
+          // LED strips, brass chamfers and glossy floor crawl as the camera dollies.
+          // Cheap + mobile-safe → on every tier.
+          <SMAA key="smaa" />,
+        ].filter(Boolean) as React.ReactElement[])}
       </EffectComposer>
     </>
   )
