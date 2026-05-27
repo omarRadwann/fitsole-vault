@@ -1170,6 +1170,129 @@ function MembershipFilmWall({ active }: { active: boolean }) {
   )
 }
 
+// ─── Concierge ───────────────────────────────────────────────────────────────
+// A photoreal concierge (AI-generated, Higgsfield) who walks in to greet you at the
+// cashier beat. Delivered as VIDEO — photoreal by definition, and as cheap as the
+// other screen decodes (no rigged 3D character). A runtime LUMA-KEY shader drops his
+// pure-black background so he stands IN the corridor; sampled sRGB is converted to
+// linear so he grades through the same ACES tonemap as the rest of the vault. A soft
+// ground-contact shadow plants his feet. He plays his walk-in once on arrival and
+// holds the standing frame; resets when you scroll away so it replays on return.
+const CONCIERGE_SRC = '/video/concierge.mp4' // production (universal H.264). For headless tuning, temporarily point at a VP9 concierge.webm (H.264 won't decode headless).
+
+function ConciergeFigure({ active, scrollProgress }: { active: boolean; scrollProgress: React.MutableRefObject<number> }) {
+  const tex = useVideoTexture(withBase(CONCIERGE_SRC), {
+    start: false,
+    muted: true,
+    loop: false,
+    playsInline: true,
+  })
+  tex.colorSpace = THREE.SRGBColorSpace
+  const shadowMatRef = useRef<THREE.MeshBasicMaterial>(null)
+  const groupRef = useRef<THREE.Group>(null)
+
+  // Soft elliptical ground-contact shadow — the single biggest "he's really there" cue.
+  const shadowTex = useMemo(() => {
+    const c = document.createElement('canvas')
+    c.width = c.height = 128
+    const ctx = c.getContext('2d')!
+    const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
+    g.addColorStop(0, 'rgba(0,0,0,0.6)')
+    g.addColorStop(0.55, 'rgba(0,0,0,0.3)')
+    g.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 128, 128)
+    return new THREE.CanvasTexture(c)
+  }, [])
+
+  // Luma-key material: alpha = smoothstep(low, high, luminance); black bg → transparent.
+  const mat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          map: { value: tex },
+          keyLow: { value: 0.05 },
+          keyHigh: { value: 0.17 },
+          opacity: { value: 0 },
+          tint: { value: new THREE.Color('#FFEAD0') },
+        },
+        vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `
+          uniform sampler2D map; uniform float keyLow; uniform float keyHigh; uniform float opacity; uniform vec3 tint; varying vec2 vUv;
+          void main(){
+            vec4 c = texture2D(map, vUv);
+            float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+            float a = smoothstep(keyLow, keyHigh, l) * opacity;
+            if (a < 0.004) discard;
+            vec3 lin = pow(max(c.rgb, 0.0), vec3(2.2)) * tint; // sRGB→linear so ACES grades him with the vault
+            gl_FragColor = vec4(lin, a);
+          }`,
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    [tex]
+  )
+
+  // Hard-pause when the vault parks off-screen (fires even with the render loop frozen).
+  useEffect(() => {
+    const vid = tex.image as HTMLVideoElement | undefined
+    if (vid && !active) vid.pause()
+  }, [active, tex])
+
+  useFrame((_, delta) => {
+    const vid = tex.image as HTMLVideoElement | undefined
+    if (!vid) return
+    const p = scrollProgress.current
+    // Cashier band — he walks in as you arrive, then holds the standing last frame.
+    const inBand = active && p > 0.42 && p < 0.96
+    if (inBand) {
+      if (vid.paused && !vid.ended) vid.play().catch(() => {})
+    } else {
+      if (!vid.paused) vid.pause()
+      if (p <= 0.42 || p >= 0.99) {
+        try { vid.currentTime = 0 } catch { /* not seekable yet */ }
+      }
+    }
+    const ready = vid.readyState >= 2 && vid.videoWidth > 0
+    const target = inBand && ready ? 1 : 0
+    const u = mat.uniforms.opacity
+    u.value += (target - u.value) * Math.min(1, delta * 4)
+    if (shadowMatRef.current) shadowMatRef.current.opacity = u.value * 0.55
+
+    // Dev-only live tuning (no-op in prod — window.__concierge is undefined there).
+    if (groupRef.current && typeof window !== 'undefined') {
+      const cfg = (window as unknown as { __concierge?: Record<string, number> }).__concierge
+      if (cfg) {
+        groupRef.current.position.set(cfg.x ?? 0.82, cfg.y ?? 0, cfg.z ?? -8.7)
+        groupRef.current.rotation.y = cfg.ry ?? -0.3
+        groupRef.current.scale.setScalar(cfg.s ?? 1)
+        if (cfg.kl != null) mat.uniforms.keyLow.value = cfg.kl
+        if (cfg.kh != null) mat.uniforms.keyHigh.value = cfg.kh
+        if (cfg.force != null) u.value = cfg.force // force opacity for framing tests
+      }
+    }
+  })
+
+  const PLANE_H = 2.25
+  const PLANE_W = PLANE_H * (9 / 16) // source AR 9:16
+
+  return (
+    <group ref={groupRef} position={[0.82, 0, -8.7]} rotation={[0, -0.3, 0]}>
+      {/* Soft ground-contact shadow, foreshortened (wider than deep). */}
+      <mesh position={[0, 0.015, 0.05]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.1, 0.7, 1]}>
+        <planeGeometry args={[1.1, 1.1]} />
+        <meshBasicMaterial ref={shadowMatRef} map={shadowTex} transparent opacity={0} depthWrite={false} toneMapped={false} />
+      </mesh>
+      {/* Keyed figure plane — feet near the floor (slight downward nudge). */}
+      <mesh position={[0, PLANE_H / 2 - 0.06, 0]}>
+        <planeGeometry args={[PLANE_W, PLANE_H]} />
+        <primitive object={mat} attach="material" />
+      </mesh>
+    </group>
+  )
+}
+
 // Slow-drifting dust motes catching the LED light — depth + life in the volume.
 // ~320 additive points on a soft round sprite, recycled upward. Cheap (one draw
 // call, a tiny per-frame y-bump) so it runs on both quality tiers.
@@ -1451,6 +1574,13 @@ export default function VaultScene({ scrollProgress, active, tier, reduced = fal
 
       {/* Authenticity counter */}
       <AuthenticityCounter active={active} scrollProgress={scrollProgress} tier={tier} />
+
+      {/* Concierge — photoreal AI figure who walks in to serve you at the cashier beat */}
+      <AssetErrorBoundary fallback={null}>
+        <Suspense fallback={null}>
+          <ConciergeFigure active={active} scrollProgress={scrollProgress} />
+        </Suspense>
+      </AssetErrorBoundary>
 
       {/* Shoebox stacks flanking the counter (moved with it to z≈-8) */}
       <ShoeboxStack position={[-1.6, 0, -7.9]} />
