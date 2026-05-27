@@ -1184,12 +1184,13 @@ function ConciergeFigure({ active, scrollProgress }: { active: boolean; scrollPr
   const tex = useVideoTexture(withBase(CONCIERGE_SRC), {
     start: false,
     muted: true,
-    loop: false,
+    loop: true, // ALWAYS moving while at the cashier (was false → play-once-then-freeze)
     playsInline: true,
   })
   tex.colorSpace = THREE.SRGBColorSpace
   const shadowMatRef = useRef<THREE.MeshBasicMaterial>(null)
   const groupRef = useRef<THREE.Group>(null)
+  const baseFade = useRef(0) // slow presence fade (enter/exit), multiplied by the loop-seam fade
 
   // Soft elliptical ground-contact shadow — the single biggest "he's really there" cue.
   const shadowTex = useMemo(() => {
@@ -1211,8 +1212,8 @@ function ConciergeFigure({ active, scrollProgress }: { active: boolean; scrollPr
       new THREE.ShaderMaterial({
         uniforms: {
           map: { value: tex },
-          keyLow: { value: 0.05 },
-          keyHigh: { value: 0.17 },
+          keyLow: { value: 0.03 },
+          keyHigh: { value: 0.09 },
           opacity: { value: 0 },
           tint: { value: new THREE.Color('#FFEAD0') },
         },
@@ -1244,29 +1245,35 @@ function ConciergeFigure({ active, scrollProgress }: { active: boolean; scrollPr
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid) return
     const p = scrollProgress.current
-    // Cashier band — he walks in as you arrive, then holds the standing last frame.
-    const inBand = active && p > 0.42 && p < 0.96
+    // Cashier window ONLY (was p>0.42, which left a static figure in the drop beat).
+    // Loops + self-heals like the court film, so she's ALWAYS moving while you're at the
+    // counter — the old play-once-then-hold logic is what froze her in production.
+    const inBand = active && p > 0.62 && p < 0.92
     if (inBand) {
-      if (vid.paused && !vid.ended) vid.play().catch(() => {})
-    } else {
-      if (!vid.paused) vid.pause()
-      if (p <= 0.42 || p >= 0.99) {
-        try { vid.currentTime = 0 } catch { /* not seekable yet */ }
-      }
+      if (vid.paused) vid.play().catch(() => {})
+    } else if (!vid.paused) {
+      vid.pause()
     }
     const ready = vid.readyState >= 2 && vid.videoWidth > 0
-    const target = inBand && ready ? 1 : 0
+    // Presence fade (slow enter/exit) × loop-seam fade (crisp): ease to 0 in the first/
+    // last ~0.3s of the clip so the walk's loop reset reads as continuous presence, not a
+    // teleport jump back to the start pose.
+    const baseTarget = inBand && ready ? 1 : 0
+    baseFade.current += (baseTarget - baseFade.current) * Math.min(1, delta * 4)
+    const dur = vid.duration || 0
+    const tt = vid.currentTime
+    const seam = dur > 1 ? Math.min(1, Math.min(tt, dur - tt) / 0.3) : 1
     const u = mat.uniforms.opacity
-    u.value += (target - u.value) * Math.min(1, delta * 4)
+    u.value = baseFade.current * seam
     if (shadowMatRef.current) shadowMatRef.current.opacity = u.value * 0.55
 
     // Dev-only live tuning (no-op in prod — window.__concierge is undefined there).
     if (groupRef.current && typeof window !== 'undefined') {
       const cfg = (window as unknown as { __concierge?: Record<string, number> }).__concierge
       if (cfg) {
-        groupRef.current.position.set(cfg.x ?? 0.82, cfg.y ?? 0, cfg.z ?? -8.7)
-        groupRef.current.rotation.y = cfg.ry ?? -0.3
-        groupRef.current.scale.setScalar(cfg.s ?? 1)
+        groupRef.current.position.set(cfg.x ?? 0.85, cfg.y ?? 0, cfg.z ?? -9.3)
+        groupRef.current.rotation.y = cfg.ry ?? -0.32
+        groupRef.current.scale.setScalar(cfg.s ?? 0.8)
         if (cfg.kl != null) mat.uniforms.keyLow.value = cfg.kl
         if (cfg.kh != null) mat.uniforms.keyHigh.value = cfg.kh
         if (cfg.force != null) u.value = cfg.force // force opacity for framing tests
@@ -1278,7 +1285,7 @@ function ConciergeFigure({ active, scrollProgress }: { active: boolean; scrollPr
   const PLANE_W = PLANE_H * (9 / 16) // source AR 9:16
 
   return (
-    <group ref={groupRef} position={[0.82, 0, -8.7]} rotation={[0, -0.3, 0]}>
+    <group ref={groupRef} position={[0.85, 0, -9.3]} rotation={[0, -0.32, 0]} scale={0.8}>
       {/* Soft ground-contact shadow, foreshortened (wider than deep). */}
       <mesh position={[0, 0.015, 0.05]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.1, 0.7, 1]}>
         <planeGeometry args={[1.1, 1.1]} />
