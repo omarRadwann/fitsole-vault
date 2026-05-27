@@ -452,6 +452,14 @@ function CheckoutScreenPoster() {
   )
 }
 
+// Feature flag — play the drop + cashier screen videos on the SAFE tier too. These
+// screens were SAFE-gated to poster-only for decode budget; now that the device-tier
+// fix runs SAFE smoothly, three muted hardware-decoded streams are affordable and the
+// user wanted all three screens animating on the old Dell. (The court film is
+// unconditionally always-on — that's its own change.) ROLLBACK: set this to false to
+// restore poster-only on SAFE for the drop + cashier screens if a weak GPU stutters.
+const SCREEN_VIDEOS_ON_SAFE = true
+
 // Procedural premium authentication station + the checkout screen above it.
 function AuthenticityCounter({ active, scrollProgress, tier }: { active: boolean; scrollProgress: React.MutableRefObject<number>; tier: QualityTier }) {
   return (
@@ -511,8 +519,9 @@ function AuthenticityCounter({ active, scrollProgress, tier }: { active: boolean
             <CheckoutScreenPoster />
           </Suspense>
         </AssetErrorBoundary>
-        {/* Video only above SAFE — SAFE shows the poster (above) to save decode. */}
-        {tier !== 'safe' && (
+        {/* Video on every tier now (SCREEN_VIDEOS_ON_SAFE) — the cashier screen
+            animates on the Dell too; the poster (above) covers the decode warm-up. */}
+        {(SCREEN_VIDEOS_ON_SAFE || tier !== 'safe') && (
           <AssetErrorBoundary fallback={null}>
             <Suspense fallback={null}>
               <CashierVideo active={active} scrollProgress={scrollProgress} />
@@ -971,7 +980,9 @@ function DropFeature({
       <Suspense fallback={null}>
         <PosterScreen />
       </Suspense>
-      {tier !== 'safe' && (
+      {/* Drop screen video on every tier now (SCREEN_VIDEOS_ON_SAFE) — the
+          "before-cashier" screen animates on the Dell too. */}
+      {(SCREEN_VIDEOS_ON_SAFE || tier !== 'safe') && (
         <Suspense fallback={null}>
           <VaultVideoScreen scrollProgress={scrollProgress} />
         </Suspense>
