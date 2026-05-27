@@ -20,6 +20,11 @@ interface VaultCanvasProps {
   // When false, the render loop is parked (frameloop="never") — the vault has
   // scrolled out of view or the tab is hidden, so there's nothing to draw.
   active: boolean
+  // prefers-reduced-motion. Forwarded to VaultScene to freeze the scene's
+  // incidental auto-motion (hero turntable, drifting dust, hero scan-light,
+  // audio-reactive emissive pulse) while the scroll-driven camera and the
+  // screen videos keep running.
+  reduced: boolean
 }
 
 function LoadingFallback() {
@@ -31,7 +36,7 @@ function LoadingFallback() {
   )
 }
 
-export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps) {
+export default function VaultCanvas({ scrollProgress, active, reduced }: VaultCanvasProps) {
   // Tier resolution: a MANUAL pin (URL ?tier= or the debug overlay's H/S/L buttons)
   // always wins; otherwise the AUTO tier adapts (conservative boot guess → GPU
   // string in onCreated → PerformanceMonitor, one-way DOWN only).
@@ -137,7 +142,7 @@ export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps
         {showStats && <Stats />}
         {debug && <DebugStats sink={sink} />}
         <Suspense fallback={<LoadingFallback />}>
-          <VaultScene scrollProgress={scrollProgress} active={active} tier={tier} />
+          <VaultScene scrollProgress={scrollProgress} active={active} tier={tier} reduced={reduced} />
         </Suspense>
       </Canvas>
       {debug && (

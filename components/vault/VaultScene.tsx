@@ -542,7 +542,7 @@ const PLINTH_CAPITAL = (
   ] as [number, number][]
 ).map(([x, y]) => new THREE.Vector2(x, y))
 
-function HeroDisplay({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+function HeroDisplay({ scrollProgress, reduced = false }: { scrollProgress: React.MutableRefObject<number>; reduced?: boolean }) {
   const shoeGroupRef = useRef<THREE.Group>(null)
   const sigilRef = useRef<THREE.Group>(null)
   const haloRef = useRef<THREE.Mesh>(null)
@@ -552,6 +552,10 @@ function HeroDisplay({ scrollProgress }: { scrollProgress: React.MutableRefObjec
   const rotTarget = useRef(0)
   // Target the spotlight cone at the sneaker height.
   const spotTarget = useMemo(() => new THREE.Object3D(), [])
+  // Refs for the scroll-reactive "ignition": the product spot + cool rear rim are
+  // driven from scrollProgress in useFrame so the lighting visibly responds to scroll.
+  const spotRef = useRef<THREE.SpotLight>(null)
+  const rimRef = useRef<THREE.PointLight>(null)
 
   // Etched FitSole sigil for the brass cap. A white base map (→ full brass) with
   // a darker engraved ring + F the material multiplies down into the metal.
@@ -599,23 +603,55 @@ function HeroDisplay({ scrollProgress }: { scrollProgress: React.MutableRefObjec
 
   useFrame((state, delta) => {
     clock.current += delta
-    // Slow turntable drift PLUS a cursor nudge, eased — the hero feels alive and
-    // responsive instead of running on a fixed timer.
-    rotTarget.current = clock.current * 0.25 + state.pointer.x * 0.7
+
+    // ── Scroll-reactive HERO IGNITION ─────────────────────────────────────────
+    // The signature jaw-drop moment: as the camera approaches the venerated pair,
+    // the product spotlight SWELLS from a low pre-glow to a brilliant peak right at
+    // the hero dwell (p≈0.40) and RAKES across the shoe — so scrolling literally
+    // drives the light, and (above SAFE, where shadows render) swings the cast
+    // shadow across the plinth with it. All scroll-driven (no clock term), so it
+    // stays live under reduced-motion — that's user-controlled, not vestibular.
+    const p = scrollProgress.current
+    const hero = Math.exp(-(((p - 0.4) / 0.13) ** 2))          // 0→1 Gaussian bell at the dwell
+    const approach = Math.min(1, Math.max(0, (p - 0.18) / 0.3)) // 0 before → 1 past the hero
+    if (spotRef.current) {
+      spotRef.current.intensity = 14 + hero * 28               // dim pre-glow → ~42 brilliance at the dwell
+      spotRef.current.position.x = (0.5 - approach) * 2.4      // rake the key right → left across the pair
+      spotRef.current.position.y = 3.5 + hero * 0.5            // lifts a touch at the peak
+    }
+    if (rimRef.current) {
+      rimRef.current.intensity = 6 + hero * 6                  // cool rear kicker flares so the dark A.E.1 silhouette pops
+    }
+
     if (shoeGroupRef.current) {
-      const cur = shoeGroupRef.current.rotation.y
-      const f = 1 - Math.exp(-6 * Math.min(delta, 0.1))
-      shoeGroupRef.current.rotation.y = cur + (rotTarget.current - cur) * f
-      shoeGroupRef.current.position.y = 1.3 + Math.sin(clock.current * 0.9) * 0.03
+      if (reduced) {
+        // Reduced-motion: freeze the turntable — no auto-spin, no cursor drift, no
+        // float bob. The pair rests at its mounted pose (rotation 0, y 1.3) as a
+        // still product display; the scroll-driven camera still moves PAST it.
+        shoeGroupRef.current.position.y = 1.3
+      } else {
+        // Slow turntable drift PLUS a cursor nudge, eased — the hero feels alive and
+        // responsive instead of running on a fixed timer.
+        rotTarget.current = clock.current * 0.25 + state.pointer.x * 0.7
+        const cur = shoeGroupRef.current.rotation.y
+        const f = 1 - Math.exp(-6 * Math.min(delta, 0.1))
+        shoeGroupRef.current.rotation.y = cur + (rotTarget.current - cur) * f
+        shoeGroupRef.current.position.y = 1.3 + Math.sin(clock.current * 0.9) * 0.03
+      }
       // The etched sigil turns WITH the pair.
       if (sigilRef.current) sigilRef.current.rotation.y = shoeGroupRef.current.rotation.y
     }
     // Halo: slow specular-style shimmer (~4s) + an audio-reactive pulse on the
     // beat (ACES rolls the peaks off, so it glows brighter without clipping).
+    // Held at the steady base glow under reduced-motion — both terms are incidental
+    // pulses, so the ring just sits lit instead of breathing.
     if (haloRef.current) {
       const m = haloRef.current.material as THREE.MeshStandardMaterial
-      m.emissiveIntensity =
-        2.0 + Math.sin((clock.current * Math.PI * 2) / 4) * 0.6 + audioEngine.getLevel() * 0.9
+      // Scroll bloom (hero) is user-driven → always on, blooming the ground halo at
+      // the dwell in lockstep with the spot. The slow shimmer + audio pulse are
+      // incidental motion → held flat under reduced-motion.
+      const pulse = reduced ? 0 : Math.sin((clock.current * Math.PI * 2) / 4) * 0.6 + audioEngine.getLevel() * 0.9
+      m.emissiveIntensity = 2.0 + hero * 1.6 + pulse
     }
 
     // Authentication scan-light: a soft violet light-sheet sweeps UP through the
@@ -623,12 +659,16 @@ function HeroDisplay({ scrollProgress }: { scrollProgress: React.MutableRefObjec
     // focus — the auth-counter beat at p~0.7 is spatially elsewhere). Additive +
     // toneMapped off so it glows; depthWrite off so it never occludes the shoe.
     if (scanRef.current && scanMatRef.current) {
-      const p = scrollProgress.current
-      const lit = p > 0.34 && p < 0.5
-      const sweep = (clock.current % 2.6) / 2.6 // 0→1, slow deliberate pass
-      scanRef.current.position.y = 1.0 + sweep * 0.62 // glide across the shoe body only
-      const edgeFade = lit ? Math.min(1, Math.min(p - 0.34, 0.5 - p) / 0.04) : 0
-      scanMatRef.current.opacity = edgeFade * (0.18 + Math.sin(sweep * Math.PI) * 0.34)
+      if (reduced) {
+        // Reduced-motion: no sweeping auth beam — keep the sheet fully transparent.
+        scanMatRef.current.opacity = 0
+      } else {
+        const lit = p > 0.34 && p < 0.5
+        const sweep = (clock.current % 2.6) / 2.6 // 0→1, slow deliberate pass
+        scanRef.current.position.y = 1.0 + sweep * 0.62 // glide across the shoe body only
+        const edgeFade = lit ? Math.min(1, Math.min(p - 0.34, 0.5 - p) / 0.04) : 0
+        scanMatRef.current.opacity = edgeFade * (0.18 + Math.sin(sweep * Math.PI) * 0.34)
+      }
     }
   })
 
@@ -638,6 +678,7 @@ function HeroDisplay({ scrollProgress }: { scrollProgress: React.MutableRefObjec
           needed now; IBL + the glowing ground halo fill the near side. */}
       <primitive object={spotTarget} position={[0, 1.28, 0]} />
       <spotLight
+        ref={spotRef}
         position={[0, 3.7, 0.5]}
         target={spotTarget}
         angle={0.55}
@@ -658,7 +699,7 @@ function HeroDisplay({ scrollProgress }: { scrollProgress: React.MutableRefObjec
       {/* Cool rear rim — the ONE cool accent in an all-warm vault. Sits behind
           the dark A.E.1 so its silhouette separates from the dark backdrop with a
           thin icy edge (rim/kicker), instead of fake-brightening the dark shoe. */}
-      <pointLight position={[0, 1.45, -0.6]} intensity={7} color="#C4D6FF" distance={2.2} decay={2} />
+      <pointLight ref={rimRef} position={[0, 1.45, -0.6]} intensity={7} color="#C4D6FF" distance={2.2} decay={2} />
       {/* Warm front fill — lifts the camera-facing side of the pair out of shadow
           so it reads (the top-down key alone left the front dark). Short range +
           warm + modest — keeps the moody vault without flattening. */}
@@ -1029,7 +1070,7 @@ const FILM_H = FILM_W * (9 / 16)
 const FILM_Z = -14.6
 const FILM_Y = 1.6
 
-function MembershipFilm({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+function MembershipFilm({ active }: { active: boolean }) {
   const tex = useVideoTexture(withBase('/video/ae1-court.mp4'), {
     start: false,
     muted: true,
@@ -1039,17 +1080,23 @@ function MembershipFilm({ scrollProgress }: { scrollProgress: React.MutableRefOb
   tex.colorSpace = THREE.SRGBColorSpace
   const matRef = useRef<THREE.MeshBasicMaterial>(null)
 
+  // Hard-pause when the vault parks off-screen (fires even with the render loop
+  // frozen), releasing the decoder while the visitor shops in the flat store below.
+  useEffect(() => {
+    const vid = tex.image as HTMLVideoElement | undefined
+    if (vid && !active) vid.pause()
+  }, [active, tex])
+
   useFrame(() => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid) return
-    const p = scrollProgress.current
-    // The court film enters frame down the brand corridor (~0.84) and owns the
-    // finale. Start at 0.68 (was 0.78) so it's fully warm well before arrival — part
-    // of the "play the screens earlier" fix. It picks up exactly as the Vault
-    // screen's window ends (0.68), so concurrent decode stays ≤2 (cashier + this),
-    // never 3.
-    const shouldPlay = p > 0.68
-    if (shouldPlay) {
+    // ALWAYS-ON AD: the court film runs from the moment the vault is live and loops
+    // forever (loop:true) — playing "from the entrance, like an ad" as requested. No
+    // scroll-window gate; only parking the vault (active=false) pauses it. Driven off
+    // the REAL vid.paused state so a play() that rejects (decoder released on a
+    // park→resume) self-heals next frame instead of latching on a frozen still. One
+    // muted stream on the iGPU's fixed-function decoder — cheap to leave on every tier.
+    if (active) {
       if (vid.paused) vid.play().catch(() => {})
     } else if (!vid.paused) {
       vid.pause()
@@ -1082,7 +1129,7 @@ function MembershipFilmPoster() {
   )
 }
 
-function MembershipFilmWall({ scrollProgress, tier }: { scrollProgress: React.MutableRefObject<number>; tier: QualityTier }) {
+function MembershipFilmWall({ active }: { active: boolean }) {
   return (
     <group>
       {/* Graphite frame + warm gold edge accents */}
@@ -1096,19 +1143,18 @@ function MembershipFilmWall({ scrollProgress, tier }: { scrollProgress: React.Mu
         <boxGeometry args={[FILM_W + 0.36, 0.025, 0.02]} />
       </mesh>
       {/* Poster + video each in their own boundary, so a stalled / 503'd film
-          never blanks the wall — the poster stays painted. */}
+          never blanks the wall — the poster stays painted. The film now plays on
+          EVERY tier (always-on ad); the poster just covers the initial load gap. */}
       <AssetErrorBoundary fallback={null}>
         <Suspense fallback={null}>
           <MembershipFilmPoster />
         </Suspense>
       </AssetErrorBoundary>
-      {tier !== 'safe' && (
-        <AssetErrorBoundary fallback={null}>
-          <Suspense fallback={null}>
-            <MembershipFilm scrollProgress={scrollProgress} />
-          </Suspense>
-        </AssetErrorBoundary>
-      )}
+      <AssetErrorBoundary fallback={null}>
+        <Suspense fallback={null}>
+          <MembershipFilm active={active} />
+        </Suspense>
+      </AssetErrorBoundary>
     </group>
   )
 }
@@ -1116,7 +1162,7 @@ function MembershipFilmWall({ scrollProgress, tier }: { scrollProgress: React.Mu
 // Slow-drifting dust motes catching the LED light — depth + life in the volume.
 // ~320 additive points on a soft round sprite, recycled upward. Cheap (one draw
 // call, a tiny per-frame y-bump) so it runs on both quality tiers.
-function VaultParticles({ count = 680 }: { count?: number }) {
+function VaultParticles({ count = 680, reduced = false }: { count?: number; reduced?: boolean }) {
   const ref = useRef<THREE.Points>(null)
   const { positions, texture } = useMemo(() => {
     const positions = new Float32Array(count * 3)
@@ -1137,6 +1183,9 @@ function VaultParticles({ count = 680 }: { count?: number }) {
   }, [count])
 
   useFrame((_, delta) => {
+    // Reduced-motion: leave the motes where they were seeded — a still dust field,
+    // no upward drift and no Brownian wander.
+    if (reduced) return
     const pts = ref.current
     if (!pts) return
     const arr = pts.geometry.attributes.position.array as Float32Array
@@ -1179,9 +1228,15 @@ interface VaultSceneProps {
   // plus the DPR cap in VaultCanvas. 'safe' is the crisp-but-cheap floor for weak
   // GPUs: native DPR (never blurry), no SSAO/bloom/particles/shadows, poster-only video.
   tier: QualityTier
+  // prefers-reduced-motion. When true the scene FREEZES its incidental auto-motion
+  // — the hero turntable + float, the drifting dust, the hero scan-light sweep, and
+  // the audio-reactive emissive pulse (hero halo + vault-wide LED strips). The
+  // scroll-driven camera (user-controlled) and the screen videos (content) are
+  // deliberately KEPT, so the vault still reads as the vault, just calmer.
+  reduced?: boolean
 }
 
-export default function VaultScene({ scrollProgress, active, tier }: VaultSceneProps) {
+export default function VaultScene({ scrollProgress, active, tier, reduced = false }: VaultSceneProps) {
   const cameraTarget = useMemo(() => new THREE.Vector3(), [])
   const cameraPos = useMemo(() => new THREE.Vector3(), [])
   const lookTarget = useMemo(() => new THREE.Vector3(), [])
@@ -1255,7 +1310,10 @@ export default function VaultScene({ scrollProgress, active, tier }: VaultSceneP
     // threshold → no flicker, unlike the old breathing) and exactly 0 when
     // muted/silent (getLevel taps the post-gain master). Shared materials, so
     // the whole vault's neon pulses together on the beat.
-    const lvl = audioEngine.getLevel()
+    // Under reduced-motion, hold the shared emissives at their base intensity so the
+    // vault's neon stops pulsing on the beat (lvl→0 = no upward breathe); the
+    // audio-reactive flicker is incidental motion, not content.
+    const lvl = reduced ? 0 : audioEngine.getLevel()
     stripMat.emissiveIntensity = 1.2 + lvl * 0.7
     amberMat.emissiveIntensity = 2.0 + lvl * 0.9
     mintMat.emissiveIntensity = 1.2 + lvl * 0.8
@@ -1364,7 +1422,7 @@ export default function VaultScene({ scrollProgress, active, tier }: VaultSceneP
       <DoorFrame />
 
       {/* Hero display table */}
-      <HeroDisplay scrollProgress={scrollProgress} />
+      <HeroDisplay scrollProgress={scrollProgress} reduced={reduced} />
 
       {/* Shelf furniture (both walls, three depths each) + the instanced
           sneakers on them — both driven by SHELF_MODULES so they stay in sync. */}
@@ -1390,12 +1448,13 @@ export default function VaultScene({ scrollProgress, active, tier }: VaultSceneP
       {/* Brand corridor — illuminated brand totems (Nike / Adidas / Puma / ON) */}
       <BrandCorridor />
 
-      {/* Membership film wall — the golden-hour Cairo skyline that resolves the
-          closing "Join the Collective" beat (a window to the city). */}
-      <MembershipFilmWall scrollProgress={scrollProgress} tier={tier} />
+      {/* Membership film wall — the golden-hour court film that resolves the closing
+          "Join the Collective" beat. Plays as an always-on ad from page entrance. */}
+      <MembershipFilmWall active={active} />
 
-      {/* Drifting dust motes — full on high, halved on standard, off on safe. */}
-      {tier !== 'safe' && <VaultParticles count={tier === 'high' ? 680 : 360} />}
+      {/* Drifting dust motes — full on high, halved on standard, off on safe.
+          Frozen to a still field under reduced-motion. */}
+      {tier !== 'safe' && <VaultParticles count={tier === 'high' ? 680 : 360} reduced={reduced} />}
 
       {/* Cinematic post. The Canvas renders linear HDR (flat), bloom blooms only
           the brightest emissives in HDR, then ToneMapping (ACES Filmic) maps the

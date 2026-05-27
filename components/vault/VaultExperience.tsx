@@ -149,9 +149,11 @@ export default function VaultExperience() {
   // unintentionally), and the old `mqReduce || mqMobile` gate was hiding the entire
   // vault from capable 14" laptops → "a plain site like mobile". The vault is
   // scroll-DRIVEN (user-controlled, not an auto fly-through), so it's acceptable
-  // under reduced-motion. We still track `reduced` so VaultStatic drops its
-  // Ken-Burns drift for phone RM users (and a follow-up can tone the scene's
-  // incidental auto-motion — turntable/particles — for RM users on the vault).
+  // under reduced-motion. We still track `reduced`: VaultStatic drops its Ken-Burns
+  // drift for phone RM users, AND it's passed into <VaultCanvas> so the mounted
+  // vault freezes its incidental auto-motion (hero turntable, drifting dust, the
+  // hero scan-light, the audio-reactive emissive pulse) while keeping the
+  // scroll-driven camera (user-controlled) and the screen videos (content).
   useEffect(() => {
     const mqReduce = window.matchMedia('(prefers-reduced-motion: reduce)')
     const mqMobile = window.matchMedia('(max-width: 640px) and (pointer: coarse)')
@@ -339,7 +341,7 @@ export default function VaultExperience() {
           {/* 3D canvas */}
           <div className="absolute inset-0">
             <WebGLBoundary fallback={<VaultFailBackdrop />}>
-              <VaultCanvas scrollProgress={scrollProgress} active={vaultVisible} />
+              <VaultCanvas scrollProgress={scrollProgress} active={vaultVisible} reduced={reduced} />
             </WebGLBoundary>
           </div>
 
