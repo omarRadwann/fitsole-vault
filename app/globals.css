@@ -136,6 +136,23 @@ html.lenis body {
     0 1px 5px rgba(0, 0, 0, 0.65);
 }
 
+/* Slow cinematic drift for the static (no-WebGL / phone / reduced-motion) hero
+   backdrop still. Auto-neutralised under reduced-motion by the global reduce block
+   above (and the class is omitted entirely on that path as a belt-and-braces). */
+.vault-static-kenburns {
+  animation: vault-kenburns 26s ease-in-out infinite alternate;
+  transform-origin: 50% 45%;
+  will-change: transform;
+}
+@keyframes vault-kenburns {
+  from {
+    transform: scale(1.04);
+  }
+  to {
+    transform: scale(1.14) translateY(-1.5%);
+  }
+}
+
 /* Entrance scroll cue — a brass tick that gently bobs to read as "scroll down."
    Replaces a near-invisible pulse. Killed under reduced-motion by the global
    reduce block above. */

@@ -71,8 +71,8 @@ const scenes: Scene[] = [
     from: 0.32,
     to: 0.50,
     content: (
-      <div className="w-full max-w-6xl mx-auto flex px-6 sm:px-12 lg:px-20">
-      <div className="flex flex-col items-start gap-4 max-w-[20rem]">
+      <div className="w-full max-w-6xl mx-auto flex justify-center sm:justify-start px-6 sm:px-12 lg:px-20">
+      <div className="flex flex-col items-center text-center sm:items-start sm:text-left gap-4 max-w-[20rem]">
         <div className="flex items-center gap-2">
           <span className="text-[10px] tracking-[0.3em] uppercase text-vault-gold/70">{heroProduct.brand}</span>
           <span className="w-1 h-1 rounded-full bg-vault-gold/40" />
@@ -220,7 +220,6 @@ function AuthScene({ scrollProgress }: { scrollProgress: React.MutableRefObject<
           window.setTimeout(() => setStage(3), 880), // WEIGHT ✓
           window.setTimeout(() => {
             setStage(4) // UV ✓
-            audioEngine.playCue('chime')
             // Tell the 3D cashier screen to flash APPROVED in lockstep — the
             // checkout is the fulfilment of this verification beat.
             window.dispatchEvent(new Event('fitsole:verified'))

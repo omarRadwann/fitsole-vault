@@ -10,6 +10,7 @@ import {
   clampDpr,
   readGpuRenderer,
   tierFromGpu,
+  isIntegratedGpu,
   readForcedTier,
 } from '@/lib/deviceTier'
 import { DebugStats, DebugOverlay, makeDebugSink } from './VaultDebug'
@@ -45,9 +46,12 @@ export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps
 
   // DPR is DERIVED from the tier — clamped to [1.0, cap]. It never drops below 1.0:
   // the old PerformanceMonitor 0.6 floor is exactly what made weak laptops blurry.
-  // The cap only bites on hi-dpi screens; a 1.0-dpr laptop stays crisp on every
-  // tier and the EFFECT cuts (N8AO/bloom/particles/shadows) do the perf work.
-  const dpr = useMemo(() => clampDpr(tier), [tier])
+  // On INTEGRATED GPUs the cap is pinned to 1.0 (fill rate is the binding cost — a
+  // 1.5× render is 2.25× the pixel work; this was THE cause of the Iris Xe 1–2 fps
+  // freeze). `gpu` is '' until onCreated reads it, so the first frame uses the tier
+  // cap and then settles to 1.0 once the iGPU is identified — a one-time reflow.
+  const integrated = useMemo(() => isIntegratedGpu(gpu), [gpu])
+  const dpr = useMemo(() => clampDpr(tier, integrated), [tier, integrated])
 
   // Dev overlays. ?fps → drei Stats graph. ?debug=1 / Shift+D → the §8 readout.
   // VaultCanvas is dynamic(ssr:false) → client-only, so reading the URL during
@@ -66,13 +70,23 @@ export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('fps')
   const sink = useRef(makeDebugSink())
 
-  // One-way degrade. The action is "drop a tier" (cut the expensive effects FIRST,
-  // per briefing §6.2) — not "crush DPR." Resolution stays native; the look
-  // simplifies. A capable device that dips once never oscillates back up.
-  const degrade = useCallback(() => {
+  // Resilient auto-tier. The tier walks ONE step at a time within [safe..ceiling],
+  // where `ceiling` is the GPU-appropriate tier (set in onCreated). A transient
+  // frame dip — very common during dev/HMR compiles — drops one step and then
+  // climbs back when FPS recovers. The OLD behaviour slammed straight to 'safe' on
+  // a single bad sample and LATCHED there: poster-only cashier video (reads as
+  // "frozen") + no shadows/bloom/AO on the shelves. Pinned tiers (?tier= / H·S·L)
+  // are never auto-moved.
+  const ORDER = useMemo<QualityTier[]>(() => ['safe', 'standard', 'high'], [])
+  const ceiling = useRef<QualityTier>(urlForced ?? initialTier())
+  const stepDown = useCallback(() => {
     if (manualTier) return
-    setAutoTier((t) => (t === 'high' ? 'standard' : 'safe'))
-  }, [manualTier])
+    setAutoTier((t) => ORDER[Math.max(0, ORDER.indexOf(t) - 1)])
+  }, [manualTier, ORDER])
+  const stepUp = useCallback(() => {
+    if (manualTier) return
+    setAutoTier((t) => ORDER[Math.min(ORDER.indexOf(ceiling.current), ORDER.indexOf(t) + 1)])
+  }, [manualTier, ORDER])
 
   const forceTier = useCallback((t: QualityTier) => setManualTier(t), [])
 
@@ -104,7 +118,10 @@ export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps
           // GPU string is the most reliable capability signal — it catches the
           // classic "gaming laptop running on the Intel iGPU" case → SAFE.
           const hint = manualTier ? null : tierFromGpu(renderer)
-          if (hint) setAutoTier(hint)
+          if (hint) {
+            setAutoTier(hint)
+            ceiling.current = hint // the GPU-appropriate tier the monitor may recover back up to
+          }
           // Boot diagnostic — the same data the §8 overlay shows, for QA logs.
           console.log(
             `[vault] tier:${manualTier ?? hint ?? autoTier} dpr:${dpr.toFixed(2)} webgl2:${gl.capabilities.isWebGL2} gpu:${renderer || 'unknown'}`
@@ -112,9 +129,10 @@ export default function VaultCanvas({ scrollProgress, active }: VaultCanvasProps
         }}
       >
         <PerformanceMonitor
-          flipflops={3}
-          onDecline={degrade}
-          onFallback={() => { if (!manualTier) setAutoTier('safe') }}
+          flipflops={6}
+          onIncline={stepUp}
+          onDecline={stepDown}
+          onFallback={stepDown}
         />
         {showStats && <Stats />}
         {debug && <DebugStats sink={sink} />}

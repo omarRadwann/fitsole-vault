@@ -25,7 +25,6 @@ interface CartApi {
   count: number
   subtotal: number
   open: boolean
-  hydrated: boolean
   setOpen: (open: boolean) => void
   add: (line: Omit<CartLine, 'qty'> & { qty?: number }) => void
   remove: (id: string) => void
@@ -109,7 +108,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     count,
     subtotal,
     open,
-    hydrated,
     setOpen,
     add,
     remove,

@@ -1,7 +1,5 @@
 'use client'
 
-import { withBase } from './basePath'
-
 // FitSole Vault — Web Audio engine (placeholder sound design, synthesized).
 //
 // Architecture (per MOONSHOT_HANDOVER §6): one AudioContext, a master gain, an
@@ -19,10 +17,8 @@ class AudioEngine {
   private master: GainNode | null = null
   private bedGain: GainNode | null = null // ambient bed — ducked under cues
   private cueGain: GainNode | null = null // one-shot cues
-  private musicGain: GainNode | null = null // entrance music track
-  private musicBuffer: AudioBuffer | null = null
-  private musicSource: AudioBufferSourceNode | null = null
-  private musicStarted = false
+  private motionGain: GainNode | null = null // scroll-velocity "air" whoosh
+  private motionFilter: BiquadFilterNode | null = null
   private analyser: AnalyserNode | null = null // taps the master mix
   private freqData: Uint8Array<ArrayBuffer> | null = null
   private level = 0 // smoothed reactive energy
@@ -33,7 +29,6 @@ class AudioEngine {
   // Master volume when unmuted. Intentionally restrained — ambient, not loud.
   private readonly vol = 0.42
   private readonly bedVol = 0.62
-  private readonly musicVol = 0.34
 
   /** Lazily build the graph. Returns null if Web Audio is unavailable. */
   private ensure(): AudioContext | null {
@@ -51,35 +46,22 @@ class AudioEngine {
     const cueGain = ctx.createGain()
     cueGain.gain.value = 0.7 // restrain one-shot cues to tasteful accents
     cueGain.connect(master)
-    const musicGain = ctx.createGain()
-    musicGain.gain.value = this.musicVol
-    musicGain.connect(master)
     // Analyser taps the master mix (post-gain → silent when muted), so the vault
-    // pulses with whatever is actually audible — chiefly the entrance music.
+    // pulses with whatever is actually audible — the scroll-motion air.
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 256
     analyser.smoothingTimeConstant = 0.8
     master.connect(analyser)
     this.ctx = ctx
-    // Start the music the moment the context actually transitions to running.
-    // Browsers only grant audio "activation" on real gestures (click/tap/key) —
-    // scroll & wheel do NOT — so an early unlock() on scroll leaves the context
-    // suspended; this listener then fires music on the first qualifying gesture
-    // (a click ANYWHERE, not just the speaker), instead of silently committing a
-    // source while suspended.
-    ctx.onstatechange = () => {
-      if (ctx.state === 'running') void this.startMusic()
-    }
     this.master = master
     this.bedGain = bedGain
     this.cueGain = cueGain
-    this.musicGain = musicGain
     this.analyser = analyser
     this.freqData = new Uint8Array(analyser.frequencyBinCount)
     return ctx
   }
 
-  /** Call on a user gesture: resume the context, start the ambient bed + music. */
+  /** Call on a user gesture: resume the context + start the ambient bed. */
   unlock() {
     const ctx = this.ensure()
     if (!ctx) return
@@ -88,56 +70,15 @@ class AudioEngine {
       this.startBed(ctx)
       this.bedStarted = true
     }
-    void this.startMusic()
   }
 
   get ready() {
     return this.ctx !== null
   }
 
-  // The bed's "active" level — tucked well under the music once it's playing, so
-  // the room-tone is a faint underlayer rather than competing with the track.
+  // The bed's "active" level — a faint room-tone underlayer.
   private bedTarget(): number {
-    if (!this.bedActive) return 0
-    return this.musicStarted ? this.bedVol * 0.3 : this.bedVol
-  }
-
-  /** Lazily fetch + decode the entrance track. Silent no-op if it's absent. */
-  private async loadMusic(): Promise<AudioBuffer | null> {
-    if (this.musicBuffer) return this.musicBuffer
-    const ctx = this.ctx
-    if (!ctx) return null
-    try {
-      const res = await fetch(withBase('/audio/entrance-spiring.mp3'))
-      if (!res.ok) return null
-      this.musicBuffer = await ctx.decodeAudioData(await res.arrayBuffer())
-      return this.musicBuffer
-    } catch {
-      return null
-    }
-  }
-
-  /** Start the looping entrance music once, and tuck the ambient bed under it. */
-  private async startMusic() {
-    if (this.musicStarted) return
-    const ctx = this.ctx
-    if (!ctx || !this.musicGain) return
-    if (ctx.state !== 'running') return // suspended → wait for onstatechange to retry
-    const buffer = await this.loadMusic()
-    if (!buffer || this.musicStarted || ctx.state !== 'running') return
-    this.musicStarted = true
-    const src = ctx.createBufferSource()
-    src.buffer = buffer
-    src.loop = true
-    src.connect(this.musicGain)
-    src.start()
-    this.musicSource = src
-    if (this.bedGain) {
-      const t = ctx.currentTime
-      this.bedGain.gain.cancelScheduledValues(t)
-      this.bedGain.gain.setValueAtTime(this.bedGain.gain.value, t)
-      this.bedGain.gain.linearRampToValueAtTime(this.bedTarget(), t + 1.0)
-    }
+    return this.bedActive ? this.bedVol : 0
   }
 
   /** Smoothed 0–1 audio energy (bass-weighted) for the audio-reactive vault.
@@ -162,61 +103,31 @@ class AudioEngine {
   // inner `voice` gain, leaving `bedGain` (the bus) clean so setBedActive/duck
   // ramps can take it to TRUE silence.
   private startBed(ctx: AudioContext) {
-    const out = this.bedGain!
-    const voice = ctx.createGain()
-    voice.gain.value = 1
-    voice.connect(out)
-
-    // Soft "air": brown noise through a low lowpass — the room, not a tone.
-    const noise = this.brownNoise(ctx, 5)
-    const lp = ctx.createBiquadFilter()
-    lp.type = 'lowpass'
-    lp.frequency.value = 380
-    lp.Q.value = 0.3
-    const ng = ctx.createGain()
-    ng.gain.value = 0.09
-    noise.connect(lp)
-    lp.connect(ng)
-    ng.connect(voice)
-    noise.start()
-
-    // Faint warm sub-pad for body — two soft, heavily-filtered sines (a low
-    // octave + a quiet fifth), no buzzy waveforms. Barely-there warmth.
-    const padLp = ctx.createBiquadFilter()
-    padLp.type = 'lowpass'
-    padLp.frequency.value = 280
-    const padGain = ctx.createGain()
-    padGain.gain.value = 0.05
-    padLp.connect(padGain)
-    padGain.connect(voice)
-    for (const [freq, gain, detune] of [
-      [110, 1, 0], // A2
-      [164.81, 0.5, 5], // E3, fainter + a touch of warmth
-    ] as Array<[number, number, number]>) {
-      const o = ctx.createOscillator()
-      o.type = 'sine'
-      o.frequency.value = freq
-      o.detune.value = detune
-      const g = ctx.createGain()
-      g.gain.value = gain
-      o.connect(g)
-      g.connect(padLp)
-      o.start()
-    }
-
-    // Slow breathing on the inner voice (base 1 ± 0.1 → 0.9–1.1; never near 0,
-    // so it can't fight the bus reaching silence).
-    const lfo = ctx.createOscillator()
-    lfo.frequency.value = 0.06
-    const lfoGain = ctx.createGain()
-    lfoGain.gain.value = 0.1
-    lfo.connect(lfoGain)
-    lfoGain.connect(voice.gain)
-    lfo.start()
-
-    // Honor a bed-active intent set BEFORE unlock (the vault is visible on load,
-    // but the context only starts on the first user gesture).
-    out.gain.setValueAtTime(this.bedTarget(), ctx.currentTime)
+    // No ambient bed — the vault is SILENT at rest. The ONLY sound is the
+    // scroll-motion "air" below, driven by setMotion (zero gain when not scrolling).
+    //
+    // A soft velocity-driven WIND: brown noise → highpass (cut low rumble) →
+    // velocity-controlled lowpass (opens up + brightens with scroll speed) → gain.
+    // A lowpass (not the old bandpass) reads as smooth air rushing past, not a
+    // hiss. Routed to master so it also feeds the analyser → the neon pulses with
+    // your movement.
+    const mNoise = this.brownNoise(ctx, 4)
+    const mhp = ctx.createBiquadFilter()
+    mhp.type = 'highpass'
+    mhp.frequency.value = 180
+    const mlp = ctx.createBiquadFilter()
+    mlp.type = 'lowpass'
+    mlp.frequency.value = 360
+    mlp.Q.value = 0.5
+    const mGain = ctx.createGain()
+    mGain.gain.value = 0
+    mNoise.connect(mhp)
+    mhp.connect(mlp)
+    mlp.connect(mGain)
+    mGain.connect(this.master!)
+    mNoise.start()
+    this.motionGain = mGain
+    this.motionFilter = mlp
   }
 
   private brownNoise(ctx: AudioContext, seconds: number) {
@@ -246,6 +157,19 @@ class AudioEngine {
     this.bedGain.gain.linearRampToValueAtTime(this.bedTarget(), t + 0.7)
   }
 
+  /** Drive the scroll-motion "air" from the per-frame scroll-progress delta.
+   *  Silent at rest; louder + brighter the faster you move through the vault.
+   *  setTargetAtTime gives a smooth, click-free follow of the jittery input. */
+  setMotion(delta: number) {
+    const ctx = this.ctx
+    if (!ctx || !this.motionGain || !this.motionFilter) return
+    const drive = Math.min(1, Math.max(0, delta) * 55)
+    const t = ctx.currentTime
+    // Zero gain at rest → SILENCE when not scrolling; opens up with scroll speed.
+    this.motionGain.gain.setTargetAtTime(drive * 0.3, t, 0.08)
+    this.motionFilter.frequency.setTargetAtTime(360 + drive * 1900, t, 0.08)
+  }
+
   setMuted(m: boolean) {
     this.muted = m
     const ctx = this.ctx
@@ -256,7 +180,7 @@ class AudioEngine {
     this.master.gain.linearRampToValueAtTime(m ? 0 : this.vol, t + 0.25)
   }
 
-  /** Tuck the bed + music briefly so a cue reads cleanly, then restore. */
+  /** Tuck the bed briefly so a cue reads cleanly, then restore. */
   private duck(dur: number) {
     const ctx = this.ctx
     if (!ctx) return
@@ -268,13 +192,6 @@ class AudioEngine {
       g.setValueAtTime(g.value, t)
       g.linearRampToValueAtTime(base * 0.5, t + 0.05)
       g.linearRampToValueAtTime(base, t + dur + 0.4)
-    }
-    if (this.musicGain && this.musicStarted) {
-      const g = this.musicGain.gain
-      g.cancelScheduledValues(t)
-      g.setValueAtTime(g.value, t)
-      g.linearRampToValueAtTime(this.musicVol * 0.55, t + 0.06)
-      g.linearRampToValueAtTime(this.musicVol, t + dur + 0.45)
     }
   }
 

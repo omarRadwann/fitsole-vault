@@ -13,13 +13,26 @@ interface SearchOverlayProps {
 export default function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
-  // Focus the input on open; Escape closes; lock body scroll while open.
+  // Focus the input on open; Escape closes; trap focus; lock body scroll while open.
   useEffect(() => {
     if (!open) return
     const t = setTimeout(() => inputRef.current?.focus(), 50)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key !== 'Tab') return
+      const panel = panelRef.current
+      if (!panel) return
+      const f = panel.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])'
+      )
+      if (!f.length) return
+      const first = f[0]
+      const last = f[f.length - 1]
+      const act = document.activeElement
+      if (e.shiftKey && (act === first || !panel.contains(act))) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && (act === last || !panel.contains(act))) { e.preventDefault(); first.focus() }
     }
     window.addEventListener('keydown', onKey)
     const prevOverflow = document.body.style.overflow
@@ -69,6 +82,7 @@ export default function SearchOverlay({ open, onClose }: SearchOverlayProps) {
 
       {/* Panel */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Search products"
@@ -112,9 +126,20 @@ export default function SearchOverlay({ open, onClose }: SearchOverlayProps) {
               Start typing to search the vault.
             </p>
           ) : results.length === 0 ? (
-            <p className="px-3 py-8 text-center text-sm text-vault-muted">
-              No pairs match “{query.trim()}”.
-            </p>
+            <div className="px-3 py-8 text-center">
+              <p className="text-sm text-vault-cream/80">
+                No pairs match “{query.trim()}” yet.
+              </p>
+              <p className="mt-1.5 text-xs text-vault-muted leading-relaxed max-w-xs mx-auto">
+                New heat lands every week. Browse the full wall — your next pair might already be on it.
+              </p>
+              <button
+                onClick={() => goTo('drop-wall')}
+                className="mt-4 px-5 py-2 text-[11px] tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm"
+              >
+                Browse all drops
+              </button>
+            </div>
           ) : (
             <ul className="flex flex-col">
               {results.map((p) => (

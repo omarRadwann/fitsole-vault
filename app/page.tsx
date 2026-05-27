@@ -84,34 +84,90 @@ function CategoryNav() {
   )
 }
 
+const STORE_URL = 'https://fitsole.shop'
+
 function Footer() {
+  const columns: { heading: string; links: { label: string; href: string; external?: boolean }[] }[] = [
+    {
+      heading: 'Shop',
+      links: [
+        { label: 'New Arrivals', href: '#new-arrivals' },
+        { label: 'Best Sellers', href: '#best-sellers' },
+        { label: 'On Sale', href: '#sale' },
+        { label: 'The Wall', href: '#drop-wall' },
+        { label: 'Brands', href: '#brands' },
+      ],
+    },
+    {
+      heading: 'Help & Info',
+      links: [
+        { label: 'Authenticity Guarantee', href: STORE_URL, external: true },
+        { label: 'Shipping & Delivery', href: STORE_URL, external: true },
+        { label: 'Returns & Exchanges', href: STORE_URL, external: true },
+        { label: 'Size Guide', href: STORE_URL, external: true },
+        { label: 'Track Your Order', href: STORE_URL, external: true },
+      ],
+    },
+  ]
+
   return (
-    <footer className="border-t border-vault-border mt-16 py-12 px-6 lg:px-8">
+    <footer className="border-t border-vault-border mt-16 pt-14 pb-12 px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-8 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-8">
+          {/* Brand */}
           <div>
-            <p className="font-display text-2xl sm:text-3xl tracking-[0.2em] text-vault-cream mb-1">FITSOLE</p>
-            <p className="text-xs text-vault-muted">Born in Cairo. Built for Sneakerheads.</p>
+            <p className="font-display text-2xl sm:text-3xl tracking-[0.2em] text-vault-cream mb-2">FITSOLE</p>
+            <p className="text-xs text-vault-muted leading-relaxed max-w-[26ch]">
+              Born in Cairo. Built for sneakerheads. Every pair authenticated before it ships.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-x-10 gap-y-4">
-            {[
-              { label: 'New Arrivals', href: '#new-arrivals' },
-              { label: 'Best Sellers', href: '#best-sellers' },
-              { label: 'Brands', href: '#brands' },
-              { label: 'Sale', href: '#sale' },
-              { label: 'Shop All', href: '#drop-wall' },
-            ].map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="text-[11px] tracking-[0.15em] uppercase text-vault-muted hover:text-vault-cream transition-colors duration-200"
+
+          {/* Link columns */}
+          {columns.map((col) => (
+            <nav key={col.heading} aria-label={col.heading}>
+              <p className="font-mono text-[10px] tracking-[0.3em] uppercase text-vault-gold/70 mb-4">{col.heading}</p>
+              <ul className="flex flex-col gap-2.5">
+                {col.links.map((l) => (
+                  <li key={l.label}>
+                    <a
+                      href={l.href}
+                      {...(l.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                      className="text-[12px] text-vault-cream/70 hover:text-vault-cream transition-colors duration-200"
+                    >
+                      {l.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))}
+
+          {/* Newsletter */}
+          <div>
+            <p className="font-mono text-[10px] tracking-[0.3em] uppercase text-vault-gold/70 mb-4">The Collective</p>
+            <p className="text-xs text-vault-muted leading-relaxed mb-4 max-w-[28ch]">
+              Early access to drops, restocks, and Cairo-only releases.
+            </p>
+            <form action={STORE_URL} target="_blank" className="flex items-center gap-2">
+              <input
+                type="email"
+                name="email"
+                required
+                placeholder="you@email.com"
+                aria-label="Email address"
+                className="min-w-0 flex-1 bg-vault-surface border border-vault-border rounded-sm px-3 h-10 text-sm text-vault-cream placeholder:text-vault-muted/70 outline-none focus:border-vault-gold/50 transition-colors"
+              />
+              <button
+                type="submit"
+                className="shrink-0 h-10 px-4 text-[11px] tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm"
               >
-                {link.label}
-              </a>
-            ))}
+                Join
+              </button>
+            </form>
           </div>
         </div>
-        <div className="vault-gold-line opacity-30" />
+
+        <div className="vault-gold-line opacity-30 mt-12" />
         <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-[10px] text-vault-cream/60">
             © 2026 FitSole. All rights reserved. Cairo, Egypt.

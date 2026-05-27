@@ -1,0 +1,51 @@
+name: Deploy to GitHub Pages
+
+# Builds the Next.js static export and publishes it to GitHub Pages. Triggers on
+# pushes to main or the active polish branch, and can be run manually from the
+# Actions tab (workflow_dispatch). GITHUB_PAGES=true makes next.config emit under
+# the /fitsole-vault subpath (matching the Pages URL), and .nojekyll keeps the
+# _next/* asset folders from being stripped by Jekyll.
+on:
+  push:
+    branches: [main, polish/cashier-and-tiers]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let an in-flight deploy finish; only the latest commit's deploy matters.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Build static export (GitHub Pages subpath)
+        run: npm run build
+        env:
+          GITHUB_PAGES: 'true'
+      - name: Disable Jekyll so /_next/* assets are served
+        run: touch out/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

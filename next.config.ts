@@ -6,6 +6,9 @@ import type { NextConfig } from "next";
 const basePath = process.env.GITHUB_PAGES === "true" ? "/fitsole-vault" : "";
 
 const nextConfig: NextConfig = {
+  // Pin the workspace root so Turbopack stops inferring a parent lockfile
+  // (C:\Users\acer\pnpm-lock.yaml) over this project's own package-lock.json.
+  turbopack: { root: __dirname },
   // Emit a fully static site (out/) so it can be served by GitHub Pages.
   output: "export",
   trailingSlash: true,

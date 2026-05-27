@@ -1,19 +1,33 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, Component, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import VaultOverlay from './VaultOverlay'
 import VaultPreloader from './VaultPreloader'
 import Link from 'next/link'
 import Lenis from 'lenis'
 import { audioEngine } from '@/lib/audioEngine'
+import { withBase } from '@/lib/basePath'
 
 const VaultCanvas = dynamic(() => import('./VaultCanvas'), { ssr: false })
 
-function VaultStatic() {
+function VaultStatic({ reducedMotion = false }: { reducedMotion?: boolean }) {
   return (
-    <div className="relative h-screen flex items-center justify-center bg-vault-black px-6">
-      <div className="flex flex-col items-center text-center gap-8 max-w-2xl">
+    <div className="relative h-screen flex items-center justify-center bg-vault-black px-6 overflow-hidden">
+      {/* Cinematic backdrop so the no-WebGL / phone / reduced-motion path still
+          feels like the vault, not a plain black page. Lightweight: one poster
+          still (~27KB) with a slow Ken-Burns drift (skipped under reduced-motion),
+          behind a dark gradient that keeps the headline legible. */}
+      <div aria-hidden className="absolute inset-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={withBase('/video/ae1-vault.webp')}
+          alt=""
+          className={`h-full w-full object-cover opacity-40${reducedMotion ? '' : ' vault-static-kenburns'}`}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-vault-black/75 via-vault-black/55 to-vault-black" />
+      </div>
+      <div className="relative z-10 flex flex-col items-center text-center gap-8 max-w-2xl">
         <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">
           FitSole · Cairo
         </p>
@@ -47,6 +61,34 @@ function VaultStatic() {
   )
 }
 
+// Static dark-vault backdrop shown if WebGL fails to initialise or the context is
+// lost, so the canvas slot degrades to a warm lit room instead of a blank void —
+// the DOM overlay copy + scroll still work over it.
+function VaultFailBackdrop() {
+  return (
+    <div
+      aria-hidden
+      className="absolute inset-0"
+      style={{
+        background:
+          'radial-gradient(ellipse 70% 50% at 50% 42%, rgba(191,160,106,0.16), transparent 70%), radial-gradient(ellipse 90% 60% at 50% 100%, rgba(255,179,102,0.10), transparent 70%), #0C0B0A',
+      }}
+    />
+  )
+}
+
+// Error boundary: a failed WebGL context (no-WebGL browser, lost context, driver
+// crash) renders the static backdrop instead of throwing a blank screen.
+class WebGLBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
+
 // ── Camera pacing ────────────────────────────────────────────────────────────
 // Reparametrize linear scroll so the walk DWELLS on its two money shots — the
 // hero plinth (~0.46) and the membership reveal (~0.95) — and moves a touch
@@ -65,7 +107,7 @@ const DWELL_LUT = (() => {
   const gauss = (p: number, c: number, w: number, amt: number) =>
     amt * Math.exp(-((p - c) * (p - c)) / (2 * w * w))
   const speed = (p: number) =>
-    Math.max(0.5, 1 - gauss(p, 0.46, 0.06, 0.35) - gauss(p, 0.95, 0.05, 0.35))
+    Math.max(0.32, 1 - gauss(p, 0.46, 0.06, 0.55) - gauss(p, 0.95, 0.05, 0.35))
   let acc = 0
   for (let i = 0; i < N; i++) {
     acc += speed(i / N)
@@ -89,6 +131,7 @@ export default function VaultExperience() {
   const rafRef = useRef<number>(0)
   const progressFillRef = useRef<HTMLDivElement>(null)
   const [fallback, setFallback] = useState(false)
+  const [reduced, setReduced] = useState(false)
   // Render-gate for the WebGL canvas: true while the vault is on-screen, false
   // once it scrolls out of view below the fold (or the tab is hidden). Drives
   // <VaultCanvas active> → frameloop, so the heavy scene stops rendering while
@@ -96,14 +139,26 @@ export default function VaultExperience() {
   // re-renders (only flips React state on a boundary crossing).
   const [vaultVisible, setVaultVisible] = useState(true)
   const vaultVisibleRef = useRef(true)
-  const entranceCuedRef = useRef(false)
+  const motionProgRef = useRef(0)
 
-  // Serve the lightweight static hero to reduced-motion users and phones.
-  // Phones gate on coarse pointer too, so iPads keep the rich 3D walk.
+  // Serve the lightweight static hero ONLY to true phones (small screen + touch).
+  // Coarse-pointer gating keeps iPads AND laptops on the rich 3D walk.
+  //
+  // reduced-motion no longer forces the static hero. Windows laptops VERY commonly
+  // report prefers-reduced-motion (battery saver / "animation effects off", usually
+  // unintentionally), and the old `mqReduce || mqMobile` gate was hiding the entire
+  // vault from capable 14" laptops → "a plain site like mobile". The vault is
+  // scroll-DRIVEN (user-controlled, not an auto fly-through), so it's acceptable
+  // under reduced-motion. We still track `reduced` so VaultStatic drops its
+  // Ken-Burns drift for phone RM users (and a follow-up can tone the scene's
+  // incidental auto-motion — turntable/particles — for RM users on the vault).
   useEffect(() => {
     const mqReduce = window.matchMedia('(prefers-reduced-motion: reduce)')
     const mqMobile = window.matchMedia('(max-width: 640px) and (pointer: coarse)')
-    const update = () => setFallback(mqReduce.matches || mqMobile.matches)
+    const update = () => {
+      setReduced(mqReduce.matches)
+      setFallback(mqMobile.matches)
+    }
     update()
     mqReduce.addEventListener('change', update)
     mqMobile.addEventListener('change', update)
@@ -194,14 +249,11 @@ export default function VaultExperience() {
       const progress = typeof forced === 'number' ? forced : dwellEase(damped)
       scrollProgress.current = progress
 
-      // Entrance whoosh — a one-shot as the walk begins; re-arms at the very top
-      // so it replays on scroll-back. (No-op while muted / before unlock.)
-      if (progress > 0.04 && !entranceCuedRef.current) {
-        entranceCuedRef.current = true
-        audioEngine.playCue('whoosh')
-      } else if (progress < 0.01) {
-        entranceCuedRef.current = false
-      }
+      // Scroll-motion audio — a soft "air" whoosh whose level + brightness track
+      // how fast you're moving through the vault. Movement is what you hear; at
+      // rest only the faint ambient bed remains. Replaces the old music + cues.
+      audioEngine.setMotion(Math.abs(progress - motionProgRef.current))
+      motionProgRef.current = progress
 
       // Update overlay section opacities
       sceneEls.forEach((el) => {
@@ -248,7 +300,11 @@ export default function VaultExperience() {
         // the sticky takes a whole 100vh to release, and a fully-opaque scrim made
         // that entire stretch dead black). The storefront still rises out of dusk.
         scrimEl.style.opacity = String(
-          Math.max(0, Math.min(0.5, (progress - 0.95) / 0.05))
+          // Finale (basketball film + copy) stays fully clear through the beat, then
+          // deepens to a near-dark dusk over the last ~3.5% so the vault dims as it
+          // scrolls away and the shop emerges from black — a clean wipe, not a
+          // half-lit hard cut into the flat storefront.
+          Math.max(0, Math.min(0.82, (progress - 0.965) / 0.035))
         )
       }
 
@@ -273,7 +329,7 @@ export default function VaultExperience() {
   return (
     <section id="vault-walk" aria-label="FitSole Vault Walk experience">
       {fallback ? (
-        <VaultStatic />
+        <VaultStatic reducedMotion={reduced} />
       ) : (
       <>
       <VaultPreloader />
@@ -282,7 +338,9 @@ export default function VaultExperience() {
         <div className="sticky top-0 h-screen w-full overflow-hidden">
           {/* 3D canvas */}
           <div className="absolute inset-0">
-            <VaultCanvas scrollProgress={scrollProgress} active={vaultVisible} />
+            <WebGLBoundary fallback={<VaultFailBackdrop />}>
+              <VaultCanvas scrollProgress={scrollProgress} active={vaultVisible} />
+            </WebGLBoundary>
           </div>
 
           {/* DOM overlays */}

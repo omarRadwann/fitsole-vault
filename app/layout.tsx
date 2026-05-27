@@ -27,7 +27,11 @@ export const metadata: Metadata = {
     title: 'FitSole — Egypt\'s Sneaker Vault',
     description: 'Born in Cairo. Built for Sneakerheads.',
     type: 'website',
+    siteName: 'FitSole',
+    locale: 'en_EG',
   },
+  robots: { index: true, follow: true },
+  authors: [{ name: 'FitSole' }],
 }
 
 export default function RootLayout({

@@ -16,7 +16,10 @@ function shopBrand(brand: ProductBrand) {
   window.dispatchEvent(
     new CustomEvent<ShopFilterDetail>('fitsole:shop', { detail: { brand } })
   )
-  document.getElementById('drop-wall')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // rAF so the ShopWall brand filter applies before we scroll there.
+  requestAnimationFrame(() =>
+    document.getElementById('drop-wall')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  )
 }
 
 export default function BrandStrip() {

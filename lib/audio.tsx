@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { audioEngine } from './audioEngine'
 
-const STORAGE_KEY = 'fitsole-audio-muted'
+const STORAGE_KEY = 'fitsole-audio-v2'
 
 interface AudioState {
   muted: boolean
@@ -34,11 +34,10 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const stored = localStorage.getItem(STORAGE_KEY)
-    // Default: ON (unmuted) — but silent until the first gesture (autoplay-safe).
-    // Reduced-motion users default to muted (respect the preference).
-    const initial = stored != null ? stored === '1' : reduce
+    // Sound is ON by default for everyone (it stays silent until the first user
+    // gesture, per the browser autoplay policy). An explicit mute is remembered.
+    const initial = stored === '1'
     setMuted(initial)
     audioEngine.setMuted(initial)
     setHydrated(true)

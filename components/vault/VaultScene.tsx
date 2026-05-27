@@ -352,28 +352,32 @@ function CashierVideo({ active, scrollProgress }: { active: boolean; scrollProgr
   })
   tex.colorSpace = THREE.SRGBColorSpace
   const matRef = useRef<THREE.MeshBasicMaterial>(null)
-  const playing = useRef(false)
 
   // Hard-pause when the vault is parked off-screen (fires even with the render
   // loop frozen, so it still releases the decoder while the visitor shops below).
   useEffect(() => {
     const vid = tex.image as HTMLVideoElement | undefined
-    if (vid && !active) { vid.pause(); playing.current = false }
+    if (vid && !active) vid.pause()
   }, [active, tex])
 
   useFrame(() => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid || !matRef.current) return
     const p = scrollProgress.current
-    // Pre-roll: begin ~0.15 of scroll BEFORE the counter is framed so decode is done
-    // by the time it's visible (kills the "frozen poster on arrival"); stop before
-    // the finale so it never decodes next to the membership wall video.
-    const shouldPlay = active && p > 0.3 && p < 0.88
-    if (shouldPlay && !playing.current) {
-      playing.current = true
-      vid.play().catch(() => {})
-    } else if (!shouldPlay && playing.current) {
-      playing.current = false
+    // Counter framed ~0.66–0.82. Start at 0.45 so it's fully WARM on arrival (the
+    // "screens took too long to come alive" fix — earlier pre-roll), end at 0.86 so
+    // it never pauses while still on screen. Concurrent decode stays ≤2: the Vault
+    // screen ends (0.68) as this ramps in, and Membership starts (0.68) as this
+    // tails out — the three never decode together. Affordable now that the device-
+    // tier fix put integrated GPUs on STANDARD@DPR1.0 (~70fps), giving the decoder
+    // the headroom whose absence used to stall requestVideoFrameCallback → "frozen".
+    // Drive play/pause off the REAL video state (vid.paused), not a manual ref, so a
+    // play() that rejects (decoder released after parking + reverse scroll) is
+    // retried next frame instead of latching frozen. Self-healing.
+    const shouldPlay = active && p > 0.45 && p < 0.86
+    if (shouldPlay) {
+      if (vid.paused) vid.play().catch(() => {})
+    } else if (!vid.paused) {
       vid.pause()
     }
     const ready = vid.readyState >= 2 && vid.videoWidth > 0
@@ -538,10 +542,12 @@ const PLINTH_CAPITAL = (
   ] as [number, number][]
 ).map(([x, y]) => new THREE.Vector2(x, y))
 
-function HeroDisplay() {
+function HeroDisplay({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
   const shoeGroupRef = useRef<THREE.Group>(null)
   const sigilRef = useRef<THREE.Group>(null)
   const haloRef = useRef<THREE.Mesh>(null)
+  const scanRef = useRef<THREE.Mesh>(null)
+  const scanMatRef = useRef<THREE.MeshBasicMaterial>(null)
   const clock = useRef(0)
   const rotTarget = useRef(0)
   // Target the spotlight cone at the sneaker height.
@@ -571,6 +577,26 @@ function HeroDisplay() {
     return t
   }, [])
 
+  // Soft violet "scan beam" texture — a vertical gradient so the swept bar reads as
+  // a glowing authentication light passing over the pair, not the flat hard sheet v1.
+  const scanTex = useMemo(() => {
+    const c = document.createElement('canvas')
+    c.width = 128
+    c.height = 32
+    const ctx = c.getContext('2d')!
+    // Soft elliptical glow (wide + thin, feathered on every edge) so the swept
+    // bar reads as a beam of light passing over the pair, not a hard rectangle.
+    const g = ctx.createRadialGradient(64, 16, 0, 64, 16, 64)
+    g.addColorStop(0, 'rgba(214,202,255,1)')
+    g.addColorStop(0.45, 'rgba(160,138,255,0.55)')
+    g.addColorStop(1, 'rgba(150,128,255,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 128, 32)
+    const t = new THREE.CanvasTexture(c)
+    t.colorSpace = THREE.SRGBColorSpace
+    return t
+  }, [])
+
   useFrame((state, delta) => {
     clock.current += delta
     // Slow turntable drift PLUS a cursor nudge, eased — the hero feels alive and
@@ -591,6 +617,19 @@ function HeroDisplay() {
       m.emissiveIntensity =
         2.0 + Math.sin((clock.current * Math.PI * 2) / 4) * 0.6 + audioEngine.getLevel() * 0.9
     }
+
+    // Authentication scan-light: a soft violet light-sheet sweeps UP through the
+    // venerated pair during the HERO beat (p≈0.34–0.50, where the shoe is the framed
+    // focus — the auth-counter beat at p~0.7 is spatially elsewhere). Additive +
+    // toneMapped off so it glows; depthWrite off so it never occludes the shoe.
+    if (scanRef.current && scanMatRef.current) {
+      const p = scrollProgress.current
+      const lit = p > 0.34 && p < 0.5
+      const sweep = (clock.current % 2.6) / 2.6 // 0→1, slow deliberate pass
+      scanRef.current.position.y = 1.0 + sweep * 0.62 // glide across the shoe body only
+      const edgeFade = lit ? Math.min(1, Math.min(p - 0.34, 0.5 - p) / 0.04) : 0
+      scanMatRef.current.opacity = edgeFade * (0.18 + Math.sin(sweep * Math.PI) * 0.34)
+    }
   })
 
   return (
@@ -601,14 +640,17 @@ function HeroDisplay() {
       <spotLight
         position={[0, 3.7, 0.5]}
         target={spotTarget}
-        angle={0.5}
+        angle={0.55}
         penumbra={0.9}
-        intensity={16}
-        distance={12}
+        intensity={26}
+        distance={14}
         decay={2}
         color="#FFF6EC"
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        // 1536² (not 2048²): the spot frustum is tight (far=10) over one pedestal,
+        // so this stays crisp at ~44% the per-update cost — and the map only
+        // re-renders every other frame (shadowMap.needsUpdate toggle below).
+        shadow-mapSize={[1536, 1536]}
         shadow-bias={-0.0002}
         shadow-camera-near={0.5}
         shadow-camera-far={10}
@@ -617,6 +659,10 @@ function HeroDisplay() {
           the dark A.E.1 so its silhouette separates from the dark backdrop with a
           thin icy edge (rim/kicker), instead of fake-brightening the dark shoe. */}
       <pointLight position={[0, 1.45, -0.6]} intensity={7} color="#C4D6FF" distance={2.2} decay={2} />
+      {/* Warm front fill — lifts the camera-facing side of the pair out of shadow
+          so it reads (the top-down key alone left the front dark). Short range +
+          warm + modest — keeps the moody vault without flattening. */}
+      <pointLight position={[0.5, 1.35, 1.7]} intensity={8} color="#FFE6C2" distance={4.5} decay={2} />
       {/* Glowing ground halo on the platform (blooms under the shoe) */}
       <mesh ref={haloRef} position={[0, 1.045, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.34, 0.5, 64]} />
@@ -648,6 +694,23 @@ function HeroDisplay() {
         </mesh>
       </group>
 
+      {/* Authentication scan-light sheet — swept up through the pair in useFrame,
+          gated to the hero beat. The signature "every pair is examined" moment. */}
+      <mesh ref={scanRef} position={[0, 1.3, 0.05]}>
+        <planeGeometry args={[1.3, 0.34]} />
+        <meshBasicMaterial
+          ref={scanMatRef}
+          map={scanTex}
+          color="#9C84FF"
+          transparent
+          opacity={0}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
       {/* Hero sneaker — REAL optimized GLB, slow turntable + float.
           Fallback shape only shows if the GLB fails to load. */}
       <group ref={shoeGroupRef} position={[0, 1.3, 0]}>
@@ -656,6 +719,7 @@ function HeroDisplay() {
           normalizeTo={1.05}
           seat="center"
           castShadow
+          envMapIntensity={1.3}
           fallback={
             <mesh material={heroMat}>
               <torusKnotGeometry args={[0.28, 0.09, 128, 16, 2, 3]} />
@@ -780,22 +844,22 @@ function VaultVideoScreen({
     playsInline: true,
   })
   tex.colorSpace = THREE.SRGBColorSpace
-  const playing = useRef(false)
   const videoMatRef = useRef<THREE.MeshBasicMaterial>(null)
 
   useFrame(() => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid) return
     const p = scrollProgress.current
-    // Gate to "visible enough to matter": the wall sits in frame roughly
-    // 0.30–0.62 of the walk. Play (looping) across that window so the motion is
-    // already alive when the camera turns to it; pause outside it to free decode.
-    const shouldPlay = p > 0.3 && p < 0.62
-    if (shouldPlay && !playing.current) {
-      playing.current = true
-      vid.play().catch(() => {})
-    } else if (!shouldPlay && playing.current) {
-      playing.current = false
+    // The drop wall is framed ~0.58 and stays in view through ~0.66. Start the
+    // FIRST screen very early (0.20) so it's fully ALIVE on arrival — this is the
+    // "play the screens earlier, they took too long" fix; a muted decode is cheap
+    // and the GPU now has headroom (integrated → STANDARD@DPR1.0, ~70fps vs the old
+    // 1–2). End at 0.68, just after it leaves frame, so it never pauses while still
+    // on screen (a paused video = no requestVideoFrameCallback = frozen frame).
+    const shouldPlay = p > 0.2 && p < 0.68
+    if (shouldPlay) {
+      if (vid.paused) vid.play().catch(() => {})
+    } else if (!vid.paused) {
       vid.pause()
     }
     // Cross-fade the video in over the poster once it has real frames.
@@ -966,30 +1030,28 @@ const FILM_Z = -14.6
 const FILM_Y = 1.6
 
 function MembershipFilm({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
-  const tex = useVideoTexture(withBase('/video/ae1-collective.mp4'), {
+  const tex = useVideoTexture(withBase('/video/ae1-court.mp4'), {
     start: false,
     muted: true,
     loop: true,
     playsInline: true,
   })
   tex.colorSpace = THREE.SRGBColorSpace
-  const playing = useRef(false)
   const matRef = useRef<THREE.MeshBasicMaterial>(null)
 
   useFrame(() => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid) return
     const p = scrollProgress.current
-    // Alive well before the camera arrives (brand corridor → membership). A
-    // muted+paused video is essentially free, so starting it early (~p0.55)
-    // buys ~2s for the texture to decode — no cold/white frame on arrival,
-    // and it survives a refresh that restores scroll past the membership beat.
-    const shouldPlay = p > 0.55
-    if (shouldPlay && !playing.current) {
-      playing.current = true
-      vid.play().catch(() => {})
-    } else if (!shouldPlay && playing.current) {
-      playing.current = false
+    // The court film enters frame down the brand corridor (~0.84) and owns the
+    // finale. Start at 0.68 (was 0.78) so it's fully warm well before arrival — part
+    // of the "play the screens earlier" fix. It picks up exactly as the Vault
+    // screen's window ends (0.68), so concurrent decode stays ≤2 (cashier + this),
+    // never 3.
+    const shouldPlay = p > 0.68
+    if (shouldPlay) {
+      if (vid.paused) vid.play().catch(() => {})
+    } else if (!vid.paused) {
       vid.pause()
     }
     if (matRef.current) {
@@ -1010,7 +1072,7 @@ function MembershipFilm({ scrollProgress }: { scrollProgress: React.MutableRefOb
 }
 
 function MembershipFilmPoster() {
-  const poster = useTexture(withBase('/video/ae1-collective.webp'))
+  const poster = useTexture(withBase('/video/ae1-court.webp'))
   poster.colorSpace = THREE.SRGBColorSpace
   return (
     <mesh position={[0, FILM_Y, FILM_Z]}>
@@ -1134,6 +1196,7 @@ export default function VaultScene({ scrollProgress, active, tier }: VaultSceneP
   // Flag a one-frame snap whenever the canvas (re)activates; set in an effect
   // because the transition happens while the frameloop is parked.
   const needsSnap = useRef(true)
+  const ambientRef = useRef<THREE.AmbientLight>(null)
   useEffect(() => {
     if (active) needsSnap.current = true
   }, [active])
@@ -1196,6 +1259,23 @@ export default function VaultScene({ scrollProgress, active, tier }: VaultSceneP
     stripMat.emissiveIntensity = 1.2 + lvl * 0.7
     amberMat.emissiveIntensity = 2.0 + lvl * 0.9
     mintMat.emissiveIntensity = 1.2 + lvl * 0.8
+
+    // Per-beat ambient grade — each scene gets a distinct mood while the moody
+    // vault holds (only the fill warmth/level shifts, lerped so beats blend):
+    // entrance cool → hero warm+lifted → authenticity cool/clinical → exit warm.
+    if (ambientRef.current) {
+      let ti = 0.4, tr = 1.0, tg = 0.906, tb = 0.808 // base warm cream
+      if (p < 0.18) { ti = 0.34; tr = 0.84; tg = 0.9; tb = 1.0 }
+      else if (p < 0.52) { ti = 0.52; tr = 1.0; tg = 0.9; tb = 0.78 }
+      else if (p > 0.64 && p < 0.82) { ti = 0.42; tr = 0.86; tg = 0.97; tb = 0.97 }
+      else if (p > 0.9) { ti = 0.48; tr = 1.0; tg = 0.88; tb = 0.74 }
+      const k = 1 - Math.exp(-3 * Math.min(delta, 0.1))
+      const a = ambientRef.current
+      a.intensity += (ti - a.intensity) * k
+      a.color.r += (tr - a.color.r) * k
+      a.color.g += (tg - a.color.g) * k
+      a.color.b += (tb - a.color.b) * k
+    }
   })
 
   return (
@@ -1231,7 +1311,7 @@ export default function VaultScene({ scrollProgress, active, tier }: VaultSceneP
           (constant / no per-fragment attenuation = nearly free) for global fill. */}
       {/* Global fill — warm + lifted so the moody vault stays LEGIBLE (shelves
           and products read) instead of crushing to black. */}
-      <ambientLight intensity={0.4} color="#FFE7CE" />
+      <ambientLight ref={ambientRef} intensity={0.4} color="#FFE7CE" />
       <directionalLight position={[3, 6, 14]} intensity={0.6} color="#8FA6C8" />
       {/* Warm amber glow leaking out through the glass door / entrance */}
       <pointLight position={[0, 2.3, 8]} intensity={9} color="#FFB366" distance={10} decay={2} />
@@ -1242,8 +1322,8 @@ export default function VaultScene({ scrollProgress, active, tier }: VaultSceneP
       <pointLight position={[0, 1.85, -7.5]} intensity={7} color="#FFD9A6" distance={6} decay={2} />
       {/* Shelf product fills — lift the sneakers on the side shelves so they're
           clearly visible (IBL alone left them muddy). Warm, soft, short range. */}
-      <pointLight position={[-2.7, 1.7, -6]} intensity={5} color="#FFE0B0" distance={11} decay={2} />
-      <pointLight position={[2.7, 1.7, -6]} intensity={5} color="#FFE0B0" distance={11} decay={2} />
+      <pointLight position={[-2.7, 1.7, -6]} intensity={6.5} color="#FFE0B0" distance={12} decay={2} />
+      <pointLight position={[2.7, 1.7, -6]} intensity={6.5} color="#FFE0B0" distance={12} decay={2} />
 
       {/* Floor — a SINGLE glossy PBR floor on both tiers (floorMat: metalness
           0.9 / roughness 0.22). It mirrors the baked Environment (warm
@@ -1284,7 +1364,7 @@ export default function VaultScene({ scrollProgress, active, tier }: VaultSceneP
       <DoorFrame />
 
       {/* Hero display table */}
-      <HeroDisplay />
+      <HeroDisplay scrollProgress={scrollProgress} />
 
       {/* Shelf furniture (both walls, three depths each) + the instanced
           sneakers on them — both driven by SHELF_MODULES so they stay in sync. */}

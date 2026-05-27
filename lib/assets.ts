@@ -7,7 +7,7 @@ import { BASE_PATH } from './basePath'
 const TRIPO = `${BASE_PATH}/models/tripo`
 
 export const ASSETS = {
-  heroSneaker: `${TRIPO}/hero_sports_sneaker_web_v01.optimized.glb`,
+  heroSneaker: `${TRIPO}/hero_athletic_v02.optimized.glb`,
 } as const
 
 // Lightweight sneakers displayed across the drop-wall shelves (cycled).

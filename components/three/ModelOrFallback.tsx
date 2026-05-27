@@ -42,6 +42,10 @@ interface LoadedModelProps {
   // Replace every mesh's material with this shared one (matte-clay treatment for
   // the generic Tripo shelf shoes, so their AI-3D look reads as intentional set dressing).
   material?: THREE.Material
+  // Multiply how strongly the model's PBR materials pick up the baked IBL — a
+  // safe, reversible lever to make the hero read richer/glossier WITHOUT
+  // re-authoring the GLB. Applied to MeshStandardMaterial only.
+  envMapIntensity?: number
 }
 
 function LoadedModel({
@@ -53,6 +57,7 @@ function LoadedModel({
   seat = 'bottom',
   castShadow = false,
   material,
+  envMapIntensity,
 }: LoadedModelProps) {
   const gltf = useGLTF(url)
   // Clone so the same GLB can be instanced in multiple places (e.g. shelf modules).
@@ -76,17 +81,25 @@ function LoadedModel({
       clone.position.y -= seat === 'bottom' ? box2.min.y : center.y
     }
 
-    if (castShadow || material) {
+    if (castShadow || material || envMapIntensity !== undefined) {
       clone.traverse((o) => {
         const mesh = o as THREE.Mesh
         if (!mesh.isMesh) return
         if (castShadow) mesh.castShadow = true
         if (material) mesh.material = material
+        if (envMapIntensity !== undefined) {
+          const apply = (mm: THREE.Material) => {
+            const std = mm as THREE.MeshStandardMaterial
+            if (std.isMeshStandardMaterial) std.envMapIntensity = envMapIntensity
+          }
+          if (Array.isArray(mesh.material)) mesh.material.forEach(apply)
+          else apply(mesh.material)
+        }
       })
     }
 
     return clone
-  }, [gltf.scene, normalizeTo, seat, castShadow, material])
+  }, [gltf.scene, normalizeTo, seat, castShadow, material, envMapIntensity])
 
   return <primitive object={object} scale={scale} position={position} rotation={rotation} />
 }

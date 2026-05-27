@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { cn } from '@/lib/cn'
 import { useCart } from '@/lib/cart'
@@ -10,18 +10,34 @@ const STORE_URL = 'https://fitsole.shop'
 
 export default function CartDrawer() {
   const { lines, count, subtotal, open, setOpen, remove, setQty, clear } = useCart()
+  const panelRef = useRef<HTMLElement>(null)
 
-  // Close on Escape and lock body scroll while open.
+  // Close on Escape, trap focus within the drawer, and lock body scroll while open.
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key === 'Escape') { setOpen(false); return }
+      if (e.key !== 'Tab') return
+      const panel = panelRef.current
+      if (!panel) return
+      const f = panel.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])'
+      )
+      if (!f.length) return
+      const first = f[0]
+      const last = f[f.length - 1]
+      const act = document.activeElement
+      if (e.shiftKey && (act === first || !panel.contains(act))) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && (act === last || !panel.contains(act))) { e.preventDefault(); first.focus() }
     }
     window.addEventListener('keydown', onKey)
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    // Move focus into the drawer for keyboard / screen-reader users.
+    const focusT = window.setTimeout(() => panelRef.current?.querySelector<HTMLElement>('button')?.focus(), 60)
     return () => {
       window.removeEventListener('keydown', onKey)
+      window.clearTimeout(focusT)
       document.body.style.overflow = prevOverflow
     }
   }, [open, setOpen])
@@ -45,6 +61,7 @@ export default function CartDrawer() {
 
       {/* Panel */}
       <aside
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Shopping cart"

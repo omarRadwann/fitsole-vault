@@ -14,9 +14,15 @@ export const TIER_DPR_CAP: Record<QualityTier, number> = {
   safe: 1.25,
 }
 
-export function clampDpr(tier: QualityTier): number {
+export function clampDpr(tier: QualityTier, integrated = false): number {
   const native = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
-  return Math.max(1.0, Math.min(native, TIER_DPR_CAP[tier]))
+  // Integrated GPUs are FILL-RATE bound: rendering at 1.5× device pixels is 2.25×
+  // the pixel work of 1.0×, and that — not triangles or postFX — is the single
+  // biggest cost on an iGPU (measured: Iris Xe at DPR 1.5 = 1–2 fps; the scene
+  // becomes a slideshow that starves video decode into looking "frozen"). So we
+  // pin integrated GPUs to native 1.0 on every tier. Discrete GPUs keep the cap.
+  const cap = integrated ? 1.0 : TIER_DPR_CAP[tier]
+  return Math.max(1.0, Math.min(native, cap))
 }
 
 // Conservative boot guess from synchronous signals (no GL context yet). We start
@@ -55,20 +61,34 @@ export function readGpuRenderer(gl: WebGLRenderingContext | WebGL2RenderingConte
 export function tierFromGpu(renderer: string): QualityTier | null {
   const r = renderer.toLowerCase()
   if (!r) return null
-  // Discrete / Apple Silicon → HIGH.
+  // Discrete / Apple Silicon → HIGH. (Intel Arc is discrete → matches here.)
   if (/(rtx|gtx|geforce|radeon|\barc\b|apple m[1-9]|quadro|nvidia)/.test(r)) return 'high'
-  // Modern, capable Intel iGPU (Iris Xe / Iris Plus) → HIGH. Measured: Iris Xe
-  // sustains the full stack (SSAO + bloom + particles + 1024 env) at ~100+ fps, so
-  // STANDARD was needlessly stripping ambient occlusion + reflections + particles
-  // from a capable machine and reading as flatter, less "lit" on scroll. Checked
-  // BEFORE the generic "intel" rule. PerformanceMonitor still degrades one-way to
-  // STANDARD→SAFE if a weaker Iris (older Iris Plus) can't actually hold it.
-  if (/iris/.test(r)) return 'high'
-  // Weak integrated / software / mobile GPUs → SAFE.
-  if (/(intel|uhd|hd graphics|mali|adreno|powervr|llvmpipe|swiftshader|microsoft basic|softwarerasterizer)/.test(r)) {
+  // Capable Intel iGPUs (Iris Xe/Plus, UHD) → STANDARD, NEVER high.
+  // HARD-LEARNED: the old "/iris/ → high" rule (claiming Iris Xe holds the full
+  // stack at 100+ fps) was wrong on real hardware — measured Iris Xe at HIGH
+  // (SSAO + bloom + SMAA, DPR 1.5) = 1–2 fps; at STANDARD@DPR1.0 it's ~70 fps.
+  // STANDARD drops SSAO and, via the integrated DPR-1.0 cap (see clampDpr), cuts
+  // fill rate ~2.25× — while KEEPING the screen videos on. The PerformanceMonitor
+  // can still step STANDARD→SAFE for a weaker iGPU.
+  if (/iris|uhd/.test(r)) return 'standard'
+  // Older/weaker Intel (HD Graphics, pre-UHD) + software / mobile GPUs → SAFE
+  // (guaranteed-smooth: no shadows/SSAO/bloom/particles, posters instead of video
+  // decode). "HD Graphics" (6th–7th-gen i5 era) can't hold STANDARD comfortably, so
+  // it gets the smooth cinematic floor by default. A ?tier=standard override is
+  // still available for anyone who wants to push it.
+  if (/(intel|hd graphics|mali|adreno|powervr|llvmpipe|swiftshader|microsoft basic|softwarerasterizer)/.test(r)) {
     return 'safe'
   }
   return null
+}
+
+// Fill-rate-bound integrated / mobile / software GPUs → DPR capped to 1.0 (see
+// clampDpr). Discrete GPUs (NVIDIA / Radeon / Apple Silicon / Intel Arc) return
+// false and keep their tier's DPR cap. Call with the unmasked renderer string.
+export function isIntegratedGpu(renderer: string): boolean {
+  const r = renderer.toLowerCase()
+  if (!r || /\barc\b/.test(r)) return false // Arc is discrete
+  return /iris|uhd|hd graphics|intel|mali|adreno|powervr|llvmpipe|swiftshader|microsoft basic|softwarerasterizer/.test(r)
 }
 
 // Resolve a ?tier= override (SSR-safe). Pins the tier so PerformanceMonitor /

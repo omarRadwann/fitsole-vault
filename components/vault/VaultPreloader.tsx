@@ -14,6 +14,7 @@ export default function VaultPreloader() {
   const startedRef = useRef(false)
   const exitingRef = useRef(false)
   const mountTime = useRef(Date.now())
+  const timers = useRef<number[]>([])
 
   // Loaders have registered — loading is genuinely underway.
   if (total > 0) startedRef.current = true
@@ -26,17 +27,24 @@ export default function VaultPreloader() {
       exitingRef.current = true
       // Hold briefly so cached loads don't flash the doors open instantly.
       const wait = Math.max(0, 800 - (Date.now() - mountTime.current))
-      window.setTimeout(() => {
-        setRevealing(true) // copy fades, then doors part + seam flares
-        window.setTimeout(() => setHidden(true), 1950) // unmount after the 0.35s delay + 1.35s slide
-      }, wait)
+      timers.current.push(
+        window.setTimeout(() => {
+          setRevealing(true) // copy fades, then doors part + seam flares
+          timers.current.push(window.setTimeout(() => setHidden(true), 1950)) // unmount after the 0.35s delay + 1.35s slide
+        }, wait)
+      )
     }
 
     // Never hang the doors shut — drain after 6s no matter what.
-    const safety = window.setTimeout(beginExit, 6000)
+    timers.current.push(window.setTimeout(beginExit, 6000))
     if (startedRef.current && !active) beginExit()
 
-    return () => window.clearTimeout(safety)
+    // Clear ALL pending timers on unmount so none fire setState after the
+    // preloader is gone (the nested reveal timers were previously leaked).
+    return () => {
+      timers.current.forEach((t) => window.clearTimeout(t))
+      timers.current = []
+    }
   }, [active])
 
   if (hidden) return null

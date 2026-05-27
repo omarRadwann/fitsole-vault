@@ -19,7 +19,10 @@ function viewAll(collection: ShopCollection) {
   window.dispatchEvent(
     new CustomEvent<ShopFilterDetail>('fitsole:shop', { detail: { collection } })
   )
-  document.getElementById('drop-wall')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // rAF so the ShopWall filter applies before we scroll there (avoids a race).
+  requestAnimationFrame(() =>
+    document.getElementById('drop-wall')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  )
 }
 
 export default function ProductWall({
