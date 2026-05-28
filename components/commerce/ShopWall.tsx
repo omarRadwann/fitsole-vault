@@ -128,7 +128,7 @@ export default function ShopWall({
       {displayed.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {displayed.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard key={product.id} product={product} anchor />
           ))}
         </div>
       ) : (

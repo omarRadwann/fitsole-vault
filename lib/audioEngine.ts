@@ -9,6 +9,9 @@
 // professionally composed sound later, replace the per-cue synth functions
 // below with decoded file buffers (e.g. loaded from /public/audio via withBase);
 // the public API (unlock / setMuted / setBedActive / playCue) does not change.
+// The ambient BED is now a real royalty-free track loaded from /public/audio.
+
+import { withBase } from '@/lib/basePath'
 
 export type CueName = 'whoosh' | 'chime' | 'thunk' | 'ney' | 'tick'
 
@@ -24,6 +27,8 @@ class AudioEngine {
   private level = 0 // smoothed reactive energy
   private bedStarted = false
   private bedActive = false
+  private musicSource: AudioBufferSourceNode | null = null
+  private musicStarted = false
   muted = false
 
   // Master volume when unmuted. Intentionally restrained — ambient, not loud.
@@ -46,6 +51,10 @@ class AudioEngine {
     const cueGain = ctx.createGain()
     cueGain.gain.value = 0.7 // restrain one-shot cues to tasteful accents
     cueGain.connect(master)
+    // (Convolution reverb removed: continuously convolving the music bed with a
+    // 1.8s stereo IR was heavy on the audio thread and could underrun → audible
+    // glitches under render/decode load. The bed + cues now run dry, straight to
+    // master — the produced track already has its own space.)
     // Analyser taps the master mix (post-gain → silent when muted), so the vault
     // pulses with whatever is actually audible — the scroll-motion air.
     const analyser = ctx.createAnalyser()
@@ -69,11 +78,22 @@ class AudioEngine {
     if (!this.bedStarted) {
       this.startBed(ctx)
       this.bedStarted = true
+      // The bed graph now exists, so apply the current on-screen state and let it
+      // rise. A setBedActive(true) that ran BEFORE unlock was a no-op (no bedGain
+      // yet) — which is exactly why the bed never came up without an icon click.
+      this.setBedActive(this.bedActive)
     }
   }
 
   get ready() {
     return this.ctx !== null
+  }
+
+  /** True once the context is actually producing sound (created AND resumed). Lets
+   *  the UI distinguish "not started yet" from "playing", so the first speaker-icon
+   *  click STARTS sound rather than muting the (still-silent) unmuted default. */
+  get running() {
+    return this.ctx !== null && this.ctx.state === 'running'
   }
 
   // The bed's "active" level — a faint room-tone underlayer.
@@ -97,20 +117,17 @@ class AudioEngine {
     return this.level
   }
 
-  // ---- Ambient bed: a soft, warm "room tone" — gently filtered air with a
-  // faint warm sub-pad underneath, breathing slowly. Deliberately quiet and
-  // atmospheric, NOT a musical drone. The breathing LFO modulates a dedicated
-  // inner `voice` gain, leaving `bedGain` (the bus) clean so setBedActive/duck
-  // ramps can take it to TRUE silence.
+  // ---- Music bed + scroll-motion air. Once unlocked (first gesture) the real
+  // royalty-free track loops CONTINUOUSLY while the vault is on-screen — no icon
+  // click needed. It routes through `bedGain` (ducks under cues, obeys mute), and
+  // the velocity "wind" rides on top straight to master. Both feed the analyser →
+  // the neon now breathes to the ACTUAL track.
   private startBed(ctx: AudioContext) {
-    // No ambient bed — the vault is SILENT at rest. The ONLY sound is the
-    // scroll-motion "air" below, driven by setMotion (zero gain when not scrolling).
-    //
-    // A soft velocity-driven WIND: brown noise → highpass (cut low rumble) →
-    // velocity-controlled lowpass (opens up + brightens with scroll speed) → gain.
-    // A lowpass (not the old bandpass) reads as smooth air rushing past, not a
-    // hiss. Routed to master so it also feeds the analyser → the neon pulses with
-    // your movement.
+    // Music bed — fetched + decoded async; the wind below still plays if it fails.
+    void this.startMusicBed(ctx)
+
+    // (c) Velocity "wind" — brown noise → highpass → speed-controlled lowpass →
+    // gain (opened by setMotion). Routed to master so it feeds the analyser too.
     const mNoise = this.brownNoise(ctx, 4)
     const mhp = ctx.createBiquadFilter()
     mhp.type = 'highpass'
@@ -118,7 +135,7 @@ class AudioEngine {
     const mlp = ctx.createBiquadFilter()
     mlp.type = 'lowpass'
     mlp.frequency.value = 360
-    mlp.Q.value = 0.5
+    mlp.Q.value = 0.7
     const mGain = ctx.createGain()
     mGain.gain.value = 0
     mNoise.connect(mhp)
@@ -128,6 +145,35 @@ class AudioEngine {
     mNoise.start()
     this.motionGain = mGain
     this.motionFilter = mlp
+  }
+
+  /** Load + loop the royalty-free music bed. Async (fetch + decode); on any failure
+   *  the bed stays silent and the velocity wind still plays. Routed through bedGain
+   *  so it ducks under cues + obeys mute. Skipped when the bed isn't active (mobile
+   *  static fallback) so phones don't fetch ~5MB for an experience they never hear. */
+  private async startMusicBed(ctx: AudioContext) {
+    if (this.musicStarted || !this.bedGain || !this.bedActive) return
+    this.musicStarted = true
+    try {
+      const res = await fetch(withBase('/audio/vault-bed.mp3'))
+      if (!res.ok) { this.musicStarted = false; return }
+      const buf = await ctx.decodeAudioData(await res.arrayBuffer())
+      const src = ctx.createBufferSource()
+      src.buffer = buf
+      src.loop = true
+      // Loop a hair inside the track so the decoded-MP3 encoder delay/padding at the
+      // raw buffer ends doesn't click on every repeat.
+      src.loopStart = 0.06
+      src.loopEnd = Math.max(0.2, buf.duration - 0.08)
+      const g = ctx.createGain()
+      g.gain.value = 0.85 // sits as present background music, not foreground
+      src.connect(g)
+      g.connect(this.bedGain)
+      src.start()
+      this.musicSource = src
+    } catch {
+      this.musicStarted = false // allow a retry on a later unlock / activation
+    }
   }
 
   private brownNoise(ctx: AudioContext, seconds: number) {
@@ -151,6 +197,9 @@ class AudioEngine {
     this.bedActive = active
     const ctx = this.ctx
     if (!ctx || !this.bedGain) return
+    // If the bed activates after unlock (e.g. scrolling back to the vault from the
+    // shop), load the music now — it was skipped at unlock while the bed was idle.
+    if (active && !this.musicStarted) void this.startMusicBed(ctx)
     const t = ctx.currentTime
     this.bedGain.gain.cancelScheduledValues(t)
     this.bedGain.gain.setValueAtTime(this.bedGain.gain.value, t)
@@ -166,8 +215,8 @@ class AudioEngine {
     const drive = Math.min(1, Math.max(0, delta) * 55)
     const t = ctx.currentTime
     // Zero gain at rest → SILENCE when not scrolling; opens up with scroll speed.
-    this.motionGain.gain.setTargetAtTime(drive * 0.3, t, 0.08)
-    this.motionFilter.frequency.setTargetAtTime(360 + drive * 1900, t, 0.08)
+    this.motionGain.gain.setTargetAtTime(drive * 0.36, t, 0.08)
+    this.motionFilter.frequency.setTargetAtTime(360 + drive * 2100, t, 0.08)
   }
 
   setMuted(m: boolean) {

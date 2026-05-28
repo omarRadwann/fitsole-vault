@@ -91,7 +91,7 @@ export default function VaultPreloader() {
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <div className="flex justify-between text-[9px] tracking-[0.3em] uppercase text-vault-muted/70">
+            <div className="flex justify-between text-[9px] tracking-[0.3em] uppercase text-vault-muted">
               <span className="transition-opacity duration-500">{LOADING_PHRASES[phraseIdx]}</span>
               <span className="tabular-nums">{pct}%</span>
             </div>

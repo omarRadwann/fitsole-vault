@@ -17,9 +17,13 @@ const BADGE_STYLES: Record<string, string> = {
 interface ProductCardProps {
   product: Product
   featured?: boolean
+  // Owns the bare `#${slug}` deep-link anchor. Only ONE wall (the always-complete
+  // ShopWall) sets this, so a product that also appears in a filtered ProductWall
+  // doesn't emit a duplicate id — `#adidas-ae-1-low` resolves to exactly one card.
+  anchor?: boolean
 }
 
-export default function ProductCard({ product, featured = false }: ProductCardProps) {
+export default function ProductCard({ product, featured = false, anchor = false }: ProductCardProps) {
   const [selectedSize, setSelectedSize] = useState<string | null>(null)
   const [added, setAdded] = useState(false)
   const { add } = useCart()
@@ -44,7 +48,7 @@ export default function ProductCard({ product, featured = false }: ProductCardPr
 
   return (
     <article
-      id={product.slug}
+      id={anchor ? product.slug : undefined}
       className={cn(
         'group relative flex flex-col bg-vault-card border border-vault-border rounded overflow-hidden scroll-mt-24',
         'card-premium hover:border-vault-gold/45',

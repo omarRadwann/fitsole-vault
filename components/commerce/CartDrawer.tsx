@@ -42,6 +42,18 @@ export default function CartDrawer() {
     }
   }, [open, setOpen])
 
+  // Restore focus to the trigger (e.g. the header Cart button or a card's Add to
+  // cart) when the drawer closes, so keyboard users land back where they were
+  // instead of at the top of <body> (WCAG 2.4.3).
+  const openerRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (open) openerRef.current = document.activeElement as HTMLElement | null
+    else if (openerRef.current) {
+      openerRef.current.focus?.()
+      openerRef.current = null
+    }
+  }, [open])
+
   return (
     <div
       className={cn(
@@ -173,7 +185,7 @@ export default function CartDrawer() {
 
             <button
               onClick={clear}
-              className="self-start mt-1 text-[10px] tracking-[0.15em] uppercase text-vault-muted/60 hover:text-vault-muted transition-colors duration-200"
+              className="self-start mt-1 text-[10px] tracking-[0.15em] uppercase text-vault-muted hover:text-vault-cream transition-colors duration-200"
             >
               Clear cart
             </button>
@@ -197,7 +209,7 @@ export default function CartDrawer() {
             >
               Continue on fitsole.shop
             </a>
-            <p className="text-[10px] text-center text-vault-muted/60">
+            <p className="text-[10px] text-center text-vault-muted">
               You&apos;ll complete your order securely on fitsole.shop
             </p>
           </div>

@@ -54,8 +54,8 @@ export default function FeaturedUnboxing() {
             <video
               ref={videoRef}
               className="absolute inset-0 h-full w-full object-cover"
-              src={withBase('/video/ae1-unboxing.mp4')}
-              poster={withBase('/video/ae1-unboxing.webp')}
+              src={withBase('/video/fitsole-unboxing.mp4')}
+              poster={withBase('/video/fitsole-unboxing.webp')}
               muted
               loop
               playsInline

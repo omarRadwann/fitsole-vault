@@ -10,7 +10,10 @@ import {
 } from 'react'
 import { audioEngine } from './audioEngine'
 
-const STORAGE_KEY = 'fitsole-audio-v2'
+// Bumped v2→v3 to clear any stale remembered mute so sound is ON by default for
+// everyone (a one-time reset of the saved preference; explicit mutes persist again
+// from here). Sound still stays silent until the first user gesture per autoplay policy.
+const STORAGE_KEY = 'fitsole-audio-v3'
 
 interface AudioState {
   muted: boolean
@@ -34,10 +37,18 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
     // Sound is ON by default for everyone (it stays silent until the first user
     // gesture, per the browser autoplay policy). An explicit mute is remembered.
-    const initial = stored === '1'
+    // Guard the read: Safari Private Mode (and any storage-disabled context) throws
+    // synchronously on localStorage access. An unguarded throw here would skip
+    // setHydrated(true), so the gesture-unlock effect below (gated on `hydrated`)
+    // would never wire up and audio would never start. Mirrors cart.tsx's guard.
+    let initial = false
+    try {
+      initial = localStorage.getItem(STORAGE_KEY) === '1'
+    } catch {
+      // storage unavailable → fall back to the unmuted default
+    }
     setMuted(initial)
     audioEngine.setMuted(initial)
     setHydrated(true)
@@ -57,14 +68,18 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, [hydrated])
 
   const toggle = useCallback(() => {
+    audioEngine.unlock() // the click is a valid gesture — (re)start the context
     setMuted((m) => {
-      const next = !m
+      // First click on a not-yet-running context = "turn sound ON", not a mute: the
+      // unmuted default is silent only because the browser blocks audio before a
+      // gesture (and scroll/wheel don't count as one). Once it's actually running,
+      // the icon toggles normally.
+      const next = audioEngine.running ? !m : false
       try {
         localStorage.setItem(STORAGE_KEY, next ? '1' : '0')
       } catch {
         // ignore storage failures (private mode etc.)
       }
-      audioEngine.unlock() // the toggle click is itself a valid gesture
       audioEngine.setMuted(next)
       return next
     })

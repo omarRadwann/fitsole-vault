@@ -107,7 +107,10 @@ const DWELL_LUT = (() => {
   const gauss = (p: number, c: number, w: number, amt: number) =>
     amt * Math.exp(-((p - c) * (p - c)) / (2 * w * w))
   const speed = (p: number) =>
-    Math.max(0.32, 1 - gauss(p, 0.46, 0.06, 0.55) - gauss(p, 0.95, 0.05, 0.35))
+    Math.max(
+      0.32,
+      1 - gauss(p, 0.46, 0.06, 0.55) - gauss(p, 0.72, 0.04, 0.25) - gauss(p, 0.95, 0.05, 0.35)
+    )
   let acc = 0
   for (let i = 0; i < N; i++) {
     acc += speed(i / N)
@@ -200,11 +203,17 @@ export default function VaultExperience() {
     // camera's own useFrame lerp still provides the visible glide along the path.
     const SCROLL_DECAY = 30
 
-    // Cache the overlay scene elements once — they're stable after mount,
-    // so there's no need to re-query the DOM every frame.
-    const sceneEls = Array.from(
+    // Cache each overlay scene ONCE — its element, its `.vault-copy` child, and its
+    // parsed beat range — so the per-frame tick never re-queries the DOM or re-parses
+    // data attributes. `last` tracks the written opacity so we only touch the DOM when
+    // it actually moves (the ~5-of-7 scenes pinned at 0 are skipped entirely).
+    const scenes = Array.from(
       container.querySelectorAll<HTMLElement>('.vault-scene-section')
-    )
+    ).map((el) => {
+      const from = parseFloat(el.dataset.sceneFrom ?? '0')
+      const to = parseFloat(el.dataset.sceneTo ?? '1')
+      return { el, copy: el.querySelector<HTMLElement>('.vault-copy'), from, to, fadeLen: (to - from) * 0.3, last: -1 }
+    })
 
     // The scroll cue is only meaningful at the entrance, and the trust bar
     // should bow out just before the vault hands off to the flat shop so
@@ -257,27 +266,25 @@ export default function VaultExperience() {
       audioEngine.setMotion(Math.abs(progress - motionProgRef.current))
       motionProgRef.current = progress
 
-      // Update overlay section opacities
-      sceneEls.forEach((el) => {
-        const from = parseFloat(el.dataset.sceneFrom ?? '0')
-        const to = parseFloat(el.dataset.sceneTo ?? '1')
-        const range = to - from
-        const fadeLen = range * 0.3
-
+      // Update overlay section opacities — only writing to the DOM when a scene's
+      // opacity actually moves (most sit pinned at 0), with NO per-frame DOM query
+      // or data-attr parse (both cached above).
+      for (const s of scenes) {
         let opacity = 0
-        if (progress >= from && progress <= to) {
+        if (progress >= s.from && progress <= s.to) {
           // First scene starts fully visible; last scene stays visible at the end.
-          const inFade = from <= 0 ? 1 : Math.min(1, (progress - from) / fadeLen)
-          const outFade = to >= 1 ? 1 : Math.min(1, (to - progress) / fadeLen)
-          opacity = Math.min(inFade, outFade)
+          const inFade = s.from <= 0 ? 1 : Math.min(1, (progress - s.from) / s.fadeLen)
+          const outFade = s.to >= 1 ? 1 : Math.min(1, (s.to - progress) / s.fadeLen)
+          opacity = Math.max(0, Math.min(inFade, outFade))
         }
-        opacity = Math.max(0, opacity)
-        el.style.opacity = String(opacity)
-
+        if (Math.abs(opacity - s.last) < 0.002) continue // unchanged → skip the DOM write
+        s.last = opacity
+        s.el.style.opacity = opacity.toFixed(3)
+        // Keep invisible beats out of the tab order + AT tree (WCAG 2.4.3 / 4.1.2).
+        ;(s.el as HTMLElement & { inert: boolean }).inert = opacity < 0.05
         // Scroll-driven reveal: copy rises into place as the scene fades in.
-        const copy = el.querySelector<HTMLElement>('.vault-copy')
-        if (copy) copy.style.transform = `translate3d(0, ${(1 - opacity) * 22}px, 0)`
-      })
+        if (s.copy) s.copy.style.transform = `translate3d(0, ${((1 - opacity) * 22).toFixed(1)}px, 0)`
+      }
 
       // Drive the story progress indicator.
       if (progressFillRef.current) {
@@ -365,7 +372,7 @@ export default function VaultExperience() {
             style={{ willChange: 'opacity' }}
             className="absolute bottom-0 left-0 right-0 z-10 py-4 px-6"
           >
-            <div className="flex justify-center gap-8 text-[9px] tracking-[0.2em] uppercase text-vault-muted/50">
+            <div className="flex justify-center gap-8 text-[9px] tracking-[0.2em] uppercase text-vault-muted">
               <span>100% Authentic</span>
               <span className="hidden sm:inline">Verified Pairs</span>
               <span>Free Exchange</span>

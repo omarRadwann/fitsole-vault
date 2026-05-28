@@ -4,6 +4,7 @@ import { Playfair_Display } from 'next/font/google'
 import './globals.css'
 import { CartProvider } from '@/lib/cart'
 import { AudioProvider } from '@/lib/audio'
+import CartAnnouncer from '@/components/commerce/CartAnnouncer'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -45,8 +46,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${playfair.variable}`}
     >
       <body className="min-h-screen bg-vault-black text-vault-cream">
+        <a href="#new-arrivals" className="skip-link">Skip to shop</a>
         <CartProvider>
           <AudioProvider>{children}</AudioProvider>
+          <CartAnnouncer />
         </CartProvider>
       </body>
     </html>

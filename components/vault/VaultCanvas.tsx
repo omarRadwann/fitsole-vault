@@ -53,9 +53,10 @@ export default function VaultCanvas({ scrollProgress, active, reduced }: VaultCa
   // the old PerformanceMonitor 0.6 floor is exactly what made weak laptops blurry.
   // On INTEGRATED GPUs the cap is pinned to 1.0 (fill rate is the binding cost — a
   // 1.5× render is 2.25× the pixel work; this was THE cause of the Iris Xe 1–2 fps
-  // freeze). `gpu` is '' until onCreated reads it, so the first frame uses the tier
-  // cap and then settles to 1.0 once the iGPU is identified — a one-time reflow.
-  const integrated = useMemo(() => isIntegratedGpu(gpu), [gpu])
+  // freeze). `gpu` is '' until onCreated reads it, so we ASSUME integrated until a
+  // discrete GPU is confirmed: the first frame boots at the safe 1.0 and only a
+  // confirmed discrete GPU reflows UP to its cap — never allocate 2.25× then shrink.
+  const integrated = useMemo(() => (gpu === '' ? true : isIntegratedGpu(gpu)), [gpu])
   const dpr = useMemo(() => clampDpr(tier, integrated), [tier, integrated])
 
   // Dev overlays. ?fps → drei Stats graph. ?debug=1 / Shift+D → the §8 readout.
@@ -113,7 +114,7 @@ export default function VaultCanvas({ scrollProgress, active, reduced }: VaultCa
           powerPreference: 'high-performance',
         }}
         // Shadows off on SAFE (set at boot for weak GPUs → no shadow pass at all).
-        shadows={tier === 'safe' ? false : 'percentage'}
+        shadows={tier === 'safe' ? false : 'soft'}
         style={{ background: '#0C0B0A' }}
         aria-hidden="true"
         onCreated={({ gl }) => {
@@ -128,9 +129,17 @@ export default function VaultCanvas({ scrollProgress, active, reduced }: VaultCa
             ceiling.current = hint // the GPU-appropriate tier the monitor may recover back up to
           }
           // Boot diagnostic — the same data the §8 overlay shows, for QA logs.
-          console.log(
-            `[vault] tier:${manualTier ?? hint ?? autoTier} dpr:${dpr.toFixed(2)} webgl2:${gl.capabilities.isWebGL2} gpu:${renderer || 'unknown'}`
-          )
+          // Log the SETTLED dpr (recomputed with the just-read GPU), not the stale
+          // render-closure `dpr` (which is still the pre-clamp tier cap here and
+          // misreported 1.50 on iGPUs that actually run at 1.0).
+          const settledDpr = clampDpr(manualTier ?? hint ?? autoTier, isIntegratedGpu(renderer))
+          // Dev-only QA telemetry — guarded so production consoles don't surface the
+          // visitor's GPU string (a minor fingerprinting / info-leak vector).
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(
+              `[vault] tier:${manualTier ?? hint ?? autoTier} dpr:${settledDpr.toFixed(2)} webgl2:${gl.capabilities.isWebGL2} gpu:${renderer || 'unknown'}`
+            )
+          }
         }}
       >
         <PerformanceMonitor

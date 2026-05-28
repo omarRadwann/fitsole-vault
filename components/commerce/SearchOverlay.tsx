@@ -44,6 +44,17 @@ export default function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     }
   }, [open, onClose])
 
+  // Restore focus to whatever opened the overlay (the header Search button) when it
+  // closes, so keyboard users aren't dropped at the top of <body> (WCAG 2.4.3).
+  const openerRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (open) openerRef.current = document.activeElement as HTMLElement | null
+    else if (openerRef.current) {
+      openerRef.current.focus?.()
+      openerRef.current = null
+    }
+  }, [open])
+
   // Reset the query whenever the overlay reopens.
   useEffect(() => {
     if (open) setQuery('')

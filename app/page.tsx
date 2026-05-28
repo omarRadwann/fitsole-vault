@@ -155,7 +155,7 @@ function Footer() {
                 required
                 placeholder="you@email.com"
                 aria-label="Email address"
-                className="min-w-0 flex-1 bg-vault-surface border border-vault-border rounded-sm px-3 h-10 text-sm text-vault-cream placeholder:text-vault-muted/70 outline-none focus:border-vault-gold/50 transition-colors"
+                className="min-w-0 flex-1 bg-vault-surface border border-vault-border rounded-sm px-3 h-10 text-sm text-vault-cream placeholder:text-vault-muted outline-none focus:border-vault-gold/50 transition-colors"
               />
               <button
                 type="submit"
