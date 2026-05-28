@@ -8,7 +8,6 @@ const TRIPO = `${BASE_PATH}/models/tripo`
 
 export const ASSETS = {
   // User-uploaded hero sneaker (meshopt-compressed: 6.7MB → 1.56MB, 219k tris kept).
-  // Revert to `hero_athletic_v02.optimized.glb` (still in this folder) to roll back.
   heroSneaker: `${TRIPO}/hero_uploaded_v01.optimized.glb`,
 } as const
 
