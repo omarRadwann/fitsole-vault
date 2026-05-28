@@ -65,7 +65,7 @@ export default function Header() {
               <Link
                 key={link.label}
                 href={link.href}
-                className="text-xs tracking-[0.15em] uppercase text-vault-muted hover:text-vault-cream transition-colors duration-200"
+                className="relative text-[13px] tracking-[0.15em] uppercase text-vault-cream/75 hover:text-vault-gold transition-colors duration-300 after:absolute after:left-0 after:-bottom-1 after:h-px after:w-0 after:bg-vault-gold/70 hover:after:w-full after:transition-all after:duration-300"
               >
                 {link.label}
               </Link>
@@ -78,7 +78,7 @@ export default function Header() {
               onClick={toggleAudio}
               aria-label={muted ? 'Unmute ambient sound' : 'Mute ambient sound'}
               aria-pressed={!muted}
-              className="text-vault-muted hover:text-vault-cream transition-colors duration-200 p-1"
+              className="text-vault-cream/70 hover:text-vault-gold hover:bg-vault-gold/10 rounded-full transition-colors duration-300 p-2"
             >
               {muted ? (
                 <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -98,7 +98,7 @@ export default function Header() {
             <button
               onClick={() => setSearchOpen(true)}
               aria-label="Search"
-              className="text-vault-muted hover:text-vault-cream transition-colors duration-200 p-1"
+              className="text-vault-cream/70 hover:text-vault-gold hover:bg-vault-gold/10 rounded-full transition-colors duration-300 p-2"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" />
@@ -109,7 +109,7 @@ export default function Header() {
             <button
               onClick={() => setOpen(true)}
               aria-label={count > 0 ? `Cart, ${count} items` : 'Cart'}
-              className="text-vault-muted hover:text-vault-cream transition-colors duration-200 p-1 relative"
+              className="text-vault-cream/70 hover:text-vault-gold hover:bg-vault-gold/10 rounded-full transition-colors duration-300 p-2 relative"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
@@ -125,7 +125,7 @@ export default function Header() {
 
             {/* Mobile menu button */}
             <button
-              className="md:hidden text-vault-muted hover:text-vault-cream transition-colors duration-200 p-1"
+              className="md:hidden text-vault-cream/70 hover:text-vault-gold hover:bg-vault-gold/10 rounded-full transition-colors duration-300 p-2"
               aria-label={menuOpen ? 'Close menu' : 'Open menu'}
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen(!menuOpen)}

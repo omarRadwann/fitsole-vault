@@ -1489,9 +1489,9 @@ export default function VaultScene({ scrollProgress, active, tier, reduced = fal
           // Bloom on high + standard; dropped on safe (emissives still read via the
           // ACES tonemap below — they just lose the soft halo).
           tier !== 'safe' ? (
-            <Bloom key="bloom" mipmapBlur intensity={0.58} luminanceThreshold={0.8} luminanceSmoothing={0.3} />
+            <Bloom key="bloom" mipmapBlur intensity={0.62} luminanceThreshold={0.78} luminanceSmoothing={0.3} />
           ) : null,
-          <Vignette key="vignette" offset={0.32} darkness={0.62} />,
+          <Vignette key="vignette" offset={0.3} darkness={0.7} />,
           // ACES tonemap maps linear HDR → display ONCE at the end. The Canvas is
           // `flat`, so this is the ONLY tonemap — kept on EVERY tier or colour breaks.
           <ToneMapping key="tonemap" mode={ToneMappingMode.ACES_FILMIC} />,

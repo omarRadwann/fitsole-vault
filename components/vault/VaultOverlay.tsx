@@ -23,7 +23,7 @@ const scenes: Scene[] = [
     content: (
       <div className="flex flex-col items-center text-center gap-6">
         <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">FitSole · Cairo</p>
-        <h1 className="font-display text-5xl sm:text-7xl lg:text-8xl font-semibold tracking-tight text-vault-cream leading-[0.95]">
+        <h1 className="font-display text-5xl sm:text-7xl lg:text-8xl font-semibold tracking-display text-vault-cream leading-[0.95]">
           Egypt&apos;s<br />Sneaker Vault
         </h1>
         <p className="text-sm text-vault-cream/70 max-w-sm leading-relaxed">
@@ -36,13 +36,13 @@ const scenes: Scene[] = [
               audioEngine.unlock() // a real click → reliably starts the music
               window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })
             }}
-            className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm cursor-pointer"
+            className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream rounded-sm btn-gold cursor-pointer"
           >
             Enter the Vault
           </button>
           <Link
             href="#new-arrivals"
-            className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium border border-vault-gold/40 text-vault-gold hover:bg-vault-gold/10 transition-colors duration-200 rounded-sm"
+            className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium border border-vault-gold/40 text-vault-gold hover:bg-vault-gold/10 rounded-sm btn-line"
           >
             Shop New Arrivals
           </Link>
@@ -57,7 +57,7 @@ const scenes: Scene[] = [
     content: (
       <div className="flex flex-col items-center text-center gap-4">
         <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">The Vault is Open</p>
-        <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
+        <h2 className="font-display text-4xl sm:text-5xl font-semibold tracking-display text-vault-cream leading-tight">
           Step Inside.
         </h2>
         <p className="text-sm text-vault-cream/70 max-w-sm leading-relaxed">
@@ -78,14 +78,14 @@ const scenes: Scene[] = [
           <span className="w-1 h-1 rounded-full bg-vault-gold/40" />
           <span className="text-[10px] tracking-[0.3em] uppercase text-vault-muted">{heroProduct.category}</span>
         </div>
-        <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-[0.95]">
+        <h2 className="font-display text-4xl sm:text-5xl font-semibold tracking-display text-vault-cream leading-[0.95]">
           {heroProduct.name}
         </h2>
         <p className="text-sm text-vault-cream/70 leading-relaxed">
           The pair on the pedestal — authenticated, in stock, ready for Cairo.
         </p>
         <div className="flex items-baseline gap-3">
-          <span className="font-display text-2xl font-semibold text-vault-gold">
+          <span className="font-display text-3xl font-semibold tracking-[-0.02em] text-vault-gold">
             {formatPrice(heroProduct.price)}
           </span>
           {heroProduct.badge && (
@@ -97,13 +97,13 @@ const scenes: Scene[] = [
         <div className="flex gap-3 mt-1">
           <Link
             href={`#${heroProduct.slug}`}
-            className="px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm"
+            className="px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream rounded-sm btn-gold"
           >
             Shop This Pair
           </Link>
           <Link
             href="#new-arrivals"
-            className="px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium border border-vault-gold/40 text-vault-gold hover:bg-vault-gold/10 transition-colors duration-200 rounded-sm"
+            className="px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium border border-vault-gold/40 text-vault-gold hover:bg-vault-gold/10 rounded-sm btn-line"
           >
             All New Arrivals
           </Link>
@@ -119,13 +119,13 @@ const scenes: Scene[] = [
     content: (
       <div className="flex flex-col items-center text-center gap-4">
         <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">The Wall</p>
-        <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
+        <h2 className="font-display text-4xl sm:text-5xl font-semibold tracking-display text-vault-cream leading-tight">
           New Drops.
         </h2>
         <p className="text-sm text-vault-cream/70">From the wall to your rotation.</p>
         <Link
           href="#drop-wall"
-          className="mt-2 px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm"
+          className="mt-2 px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream rounded-sm btn-gold"
         >
           Browse the Wall
         </Link>
@@ -143,7 +143,7 @@ const scenes: Scene[] = [
     content: (
       <div className="flex flex-col items-center text-center gap-5">
         <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">Brand Corridor</p>
-        <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
+        <h2 className="font-display text-4xl sm:text-5xl font-semibold tracking-display text-vault-cream leading-tight">
           Every brand.<br />One vault.
         </h2>
         <div className="flex flex-wrap justify-center gap-3 mt-2">
@@ -167,7 +167,7 @@ const scenes: Scene[] = [
     content: (
       <div className="flex flex-col items-center text-center gap-5">
         <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">FitSole Collective</p>
-        <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
+        <h2 className="font-display text-4xl sm:text-5xl font-semibold tracking-display text-vault-cream leading-tight">
           Join the Collective.
         </h2>
         <p className="text-sm text-vault-cream/70 max-w-xs leading-relaxed">
@@ -176,13 +176,13 @@ const scenes: Scene[] = [
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
             href="#new-arrivals"
-            className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm"
+            className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream rounded-sm btn-gold"
           >
             Claim Your Pair
           </Link>
           <Link
             href="#drop-wall"
-            className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium border border-vault-gold/40 text-vault-gold hover:bg-vault-gold/10 transition-colors duration-200 rounded-sm"
+            className="px-8 py-3 text-xs tracking-[0.2em] uppercase font-medium border border-vault-gold/40 text-vault-gold hover:bg-vault-gold/10 rounded-sm btn-line"
           >
             Step into your rotation
           </Link>
@@ -262,7 +262,7 @@ function AuthScene({ scrollProgress }: { scrollProgress: React.MutableRefObject<
             <p className="text-[10px] tracking-[0.4em] uppercase text-vault-scan">Verification System</p>
             <div className="w-4 h-px bg-vault-scan" />
           </div>
-          <h2 className="font-display text-4xl sm:text-5xl font-semibold text-vault-cream leading-tight">
+          <h2 className="font-display text-4xl sm:text-5xl font-semibold tracking-display text-vault-cream leading-tight">
             100% Authentic.<br />Every pair.
           </h2>
           <div className="flex gap-3 mt-1">
@@ -295,7 +295,7 @@ function AuthScene({ scrollProgress }: { scrollProgress: React.MutableRefObject<
           </div>
           <Link
             href="#drop-wall"
-            className="mt-1 px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium border border-vault-scan/40 text-vault-scan hover:bg-vault-scan/10 transition-colors duration-200 rounded-sm"
+            className="mt-1 px-6 py-2.5 text-xs tracking-[0.15em] uppercase font-medium border border-vault-scan/40 text-vault-scan hover:bg-vault-scan/10 rounded-sm btn-line"
           >
             Shop Verified Drops
           </Link>

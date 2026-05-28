@@ -47,7 +47,7 @@ export default function ProductCard({ product, featured = false }: ProductCardPr
       id={product.slug}
       className={cn(
         'group relative flex flex-col bg-vault-card border border-vault-border rounded overflow-hidden scroll-mt-24',
-        'transition-all duration-300 hover:border-vault-gold/30 hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
+        'card-premium hover:border-vault-gold/45',
         featured && 'lg:flex-row'
       )}
     >
@@ -81,7 +81,7 @@ export default function ProductCard({ product, featured = false }: ProductCardPr
           alt={`${product.brand} ${product.name}`}
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          className="object-contain p-4 transition-transform duration-300 group-hover:scale-105"
+          className="object-contain p-4 transition-transform duration-500 ease-out group-hover:scale-[1.07]"
         />
 
         {/* Brand label */}
@@ -122,7 +122,7 @@ export default function ProductCard({ product, featured = false }: ProductCardPr
 
         {/* Price */}
         <div className="flex items-baseline gap-2">
-          <span className="font-display text-base font-medium text-vault-cream">
+          <span className="font-display text-xl font-semibold tracking-[-0.01em] text-vault-cream">
             {formatPrice(displayPrice)}
           </span>
           {product.salePrice && (
@@ -147,7 +147,7 @@ export default function ProductCard({ product, featured = false }: ProductCardPr
                 className={cn(
                   'h-7 min-w-[2rem] px-2 text-[11px] font-medium rounded border transition-all duration-150',
                   selectedSize === size
-                    ? 'bg-vault-gold text-vault-black border-vault-gold'
+                    ? 'bg-vault-gold text-vault-black border-vault-gold font-semibold ring-1 ring-vault-gold/50'
                     : 'bg-transparent text-vault-muted border-vault-border hover:border-vault-gold/50 hover:text-vault-cream'
                 )}
               >

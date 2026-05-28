@@ -108,6 +108,53 @@ html.lenis body {
   font-family: var(--font-display);
 }
 
+/* Premium serif display tracking — Playfair tightens at large sizes for an
+   editorial, couture feel (default tracking on big serif reads loose/cheap). */
+.tracking-display {
+  letter-spacing: -0.035em;
+}
+
+/* Premium CTAs — depth + a tactile press. .btn-gold (solid) / .btn-line (outline)
+   OWN their transition, so don't also apply `transition-colors`. Auto-neutralised
+   under reduced-motion by the global reduce block above. */
+.btn-gold,
+.btn-line {
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.btn-gold:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -10px rgba(191, 160, 106, 0.55);
+}
+.btn-line:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px -12px rgba(191, 160, 106, 0.32);
+}
+.btn-gold:active,
+.btn-line:active {
+  transform: translateY(0) scale(0.985);
+  transition-duration: 0.08s;
+}
+
+/* Premium product-card hover — a warm gold-tinted lift, not a flat black drop
+   shadow (which vanishes on the dark vault surface and reads papery). */
+.card-premium {
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease,
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.card-premium:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 18px 50px -18px rgba(191, 160, 106, 0.3),
+    0 8px 20px -12px rgba(0, 0, 0, 0.6);
+}
+
 /* Thin gold rule used under section headings and dividers. */
 .vault-gold-line {
   height: 1px;
