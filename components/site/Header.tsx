@@ -44,7 +44,10 @@ export default function Header() {
       className={cn(
         'fixed top-0 left-0 right-0 z-50 transition-all duration-500',
         scrolled
-          ? 'bg-vault-black/90 backdrop-blur-md border-b border-vault-gold/10'
+          // Solid (no backdrop-blur): a fixed, always-visible blurred bar re-blurs
+          // the whole page every scroll frame — a major scroll-jank source on
+          // integrated GPUs. At 95% opacity the frosting was invisible anyway.
+          ? 'bg-vault-black/95 border-b border-vault-gold/10'
           : 'bg-transparent'
       )}
     >
@@ -148,7 +151,7 @@ export default function Header() {
       {/* Mobile menu */}
       {menuOpen && (
         <nav
-          className="md:hidden bg-vault-black/95 backdrop-blur-md border-t border-vault-gold/10 px-6 py-6 space-y-4"
+          className="md:hidden bg-vault-black/97 border-t border-vault-gold/10 px-6 py-6 space-y-4"
           aria-label="Mobile navigation"
         >
           {navLinks.map((link) => (

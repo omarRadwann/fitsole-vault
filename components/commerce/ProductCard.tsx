@@ -97,7 +97,7 @@ export default function ProductCard({ product, featured = false, anchor = false 
           aria-label={`Quick view ${product.brand} ${product.name}`}
           className="absolute inset-0 z-[1] flex items-end justify-center pb-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100 focus-visible:opacity-100 focus:outline-none"
         >
-          <span className="px-4 py-2 text-[10px] tracking-[0.2em] uppercase font-medium text-vault-cream bg-vault-black/65 backdrop-blur-sm border border-vault-gold/40 rounded-sm">
+          <span className="px-4 py-2 text-[10px] tracking-[0.2em] uppercase font-medium text-vault-cream bg-vault-black/80 border border-vault-gold/40 rounded-sm">
             Quick view
           </span>
         </button>

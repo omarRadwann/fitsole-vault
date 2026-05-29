@@ -151,7 +151,7 @@ const scenes: Scene[] = [
             <Link
               key={brand}
               href="#drop-wall"
-              className="px-4 py-1.5 text-xs tracking-[0.15em] uppercase rounded-sm border border-vault-gold/35 bg-vault-black/40 text-vault-cream/85 backdrop-blur-sm hover:border-vault-gold/70 hover:text-vault-cream hover:bg-vault-gold/10 transition-colors duration-200"
+              className="px-4 py-1.5 text-xs tracking-[0.15em] uppercase rounded-sm border border-vault-gold/35 bg-vault-black/70 text-vault-cream/85 hover:border-vault-gold/70 hover:text-vault-cream hover:bg-vault-gold/10 transition-colors duration-200"
             >
               {brand}
             </Link>
@@ -269,7 +269,7 @@ function AuthScene({ scrollProgress }: { scrollProgress: React.MutableRefObject<
             {badges.map((b) => (
               <div
                 key={b.label}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-vault-scan/40 bg-vault-black/40 backdrop-blur-sm transition-all duration-500 ease-out"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-vault-scan/40 bg-vault-black/70 transition-all duration-500 ease-out"
                 style={{
                   opacity: b.on ? 1 : 0,
                   transform: b.on ? 'translateY(0) scale(1)' : 'translateY(8px) scale(0.92)',
