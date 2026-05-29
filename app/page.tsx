@@ -1,5 +1,6 @@
 import Header from '@/components/site/Header'
 import VaultExperience from '@/components/vault/VaultExperience'
+import SkyBridge from '@/components/vault/SkyBridge'
 import ProductWall from '@/components/commerce/ProductWall'
 import ShopWall from '@/components/commerce/ShopWall'
 import BrandStrip from '@/components/site/BrandStrip'
@@ -190,6 +191,10 @@ export default function HomePage() {
       <main>
         {/* Vault Walk — the cinematic 3D experience */}
         <VaultExperience />
+
+        {/* Sky-Moment — rises out of the vault's black into a Cairo dawn (procedural
+            low-poly skyline + brass cube), bridging the cinematic into the shop. */}
+        <SkyBridge />
 
         {/* Featured drop — cinematic AI unboxing of the hero pair (Nano Banana 2 -> Kling 3.0) */}
         <FeaturedUnboxing />

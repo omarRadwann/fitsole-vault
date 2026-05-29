@@ -241,6 +241,65 @@ html.lenis body {
   }
 }
 
+/* Sky-Moment: the hero pair floats gently in the dawn clouds. Killed under
+   reduced-motion by the global reduce block (and gated in the component too). */
+.sky-float {
+  animation: sky-float 6.5s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes sky-float {
+  0%, 100% {
+    transform: translateY(0) rotate(-0.6deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(0.6deg);
+  }
+}
+
+/* Sky-Moment: gold dust drifting up through the spotlight (the vault's motes,
+   restated). Killed under reduced-motion by the global reduce block (and the
+   component doesn't render the motes at all under reduced-motion). */
+.vault-mote {
+  animation-name: vault-mote-drift;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+@keyframes vault-mote-drift {
+  0% {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-30px);
+    opacity: 0;
+  }
+}
+
+/* Sky-Moment: the halo ring around the artifact slowly breathes (scale + glow).
+   Compositor-only (transform/opacity); gated to in-view in the component and
+   killed under reduced-motion by the global reduce block. */
+.sky-breathe {
+  animation: sky-breathe 7s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+@keyframes sky-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.85;
+  }
+}
+
 /* Storefront scroll-reveal — sections fade + rise as they scroll into view, so
    the shop below the vault feels as alive as the cinematic walk. Pure CSS
    (scroll-driven animation-timeline): zero JS, works on server components, and
