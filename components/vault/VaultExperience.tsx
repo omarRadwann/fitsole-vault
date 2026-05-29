@@ -203,6 +203,16 @@ export default function VaultExperience() {
     // camera's own useFrame lerp still provides the visible glide along the path.
     const SCROLL_DECAY = 30
 
+    // Cache the vault's document-space bottom so the per-frame tick can detect
+    // "scrolled past into the shop" from window.scrollY alone — avoiding a
+    // getBoundingClientRect (forced layout) + all scene work every frame while
+    // the user is down in the flat shop (a continuous tax on the shop's scroll).
+    let vaultBottom = container.offsetTop + container.offsetHeight
+    const onVaultResize = () => {
+      vaultBottom = container.offsetTop + container.offsetHeight
+    }
+    window.addEventListener('resize', onVaultResize)
+
     // Cache each overlay scene ONCE — its element, its `.vault-copy` child, and its
     // parsed beat range — so the per-frame tick never re-queries the DOM or re-parses
     // data attributes. `last` tracks the written opacity so we only touch the DOM when
@@ -228,6 +238,21 @@ export default function VaultExperience() {
       // Frame-rate-independent damping: consistent feel regardless of FPS.
       const now = performance.now()
       lenis.raf(now) // advance Lenis on the same frame, before reading the rect
+      // Cheap off-screen fast-path: once scrolled past the vault (down in the
+      // shop), do NOTHING but keep Lenis ticking for global smooth scroll — no
+      // getBoundingClientRect (forced layout), no scene/overlay/audio work. This
+      // is mathematically the old `rect.bottom <= -0.3vh` park condition computed
+      // from window.scrollY, so the heavy page below the vault stops paying for
+      // the vault's scroll driver on every frame.
+      if (window.scrollY >= vaultBottom + window.innerHeight * 0.3) {
+        if (vaultVisibleRef.current) {
+          vaultVisibleRef.current = false
+          setVaultVisible(false)
+        }
+        lastT = now
+        rafRef.current = requestAnimationFrame(tick)
+        return
+      }
       const dt = Math.min((now - lastT) / 1000, 0.1)
       lastT = now
       const rect = container.getBoundingClientRect()
@@ -331,6 +356,7 @@ export default function VaultExperience() {
       cancelAnimationFrame(rafRef.current)
       clearTimeout(t1)
       clearTimeout(t2)
+      window.removeEventListener('resize', onVaultResize)
       lenis.destroy()
     }
   }, [fallback])
