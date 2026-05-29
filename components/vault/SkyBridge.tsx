@@ -1,61 +1,63 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import Image from 'next/image'
 import { audioEngine } from '@/lib/audioEngine'
 import { products } from '@/lib/products'
 
-// The finale's artifact: the ON Cloudmonster, presented like the vault's hero.
-const HERO = products.find((p) => p.id === 'on-cloudmonster')
+// Real 3D finale (WebGL/R3F) — mounted client-only, like VaultCanvas.
+const SkyScene = dynamic(() => import('./SkyScene'), { ssr: false })
 
-// Drifting gold dust. Deterministic (SSR-safe). [left%, top%, size, delay, dur]
-const MOTES: [number, number, number, number, number][] = [
-  [16, 30, 3, 0, 11], [26, 64, 2, 2.4, 13], [36, 20, 2, 1, 10], [46, 78, 3, 3.6, 14],
-  [56, 34, 2, 0.8, 12], [66, 70, 3, 2, 11], [76, 26, 2, 4, 13], [22, 48, 2, 5, 15],
-  [50, 54, 2, 2.2, 12.5], [70, 44, 2, 3, 11.5], [34, 84, 3, 0.5, 13.5], [80, 56, 2, 1.5, 12],
-]
+// Static product shot for the no-WebGL mobile path (the ON Cloudmonster the user
+// chose). The 3D path uses the vault's hero GLB for continuity.
+const FALLBACK = products.find((p) => p.id === 'on-cloudmonster')
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
-// smoothstep — eases the scrub so the ignition feels cinematic, not linear.
-const ease = (x: number) => x * x * (3 - 2 * x)
 
-// The closing beat: a PINNED, scroll-scrubbed cinematic reveal that stays inside
-// the vault's language. As you scroll the section, a shaft of gold IGNITES, a
-// raking highlight SWEEPS across, and the authenticated ON Cloudmonster RISES off
-// its plinth as its shadow spreads beneath it — the pair "lifting into the light."
+// The finale — a vault-quality 3D closing beat. A PINNED, scroll-scrubbed scene
+// (SkyScene) presents the hero pair on a sculpted brass plinth in a dark void with
+// real IBL + a warm key spotlight, real contact shadow on a glossy floor, and
+// bloom. Scrolling scrubs a subtle camera move + an ignition (light blooms up,
+// then dims), and the frame RESOLVES TO BLACK so it flows seamlessly into the shop.
 //
-// PERF (integrated-GPU path): the void + vignette are ONE static background layer
-// (one paint). Everything that moves is compositor-only (transform / opacity) and
-// driven by a SINGLE rAF that is GATED to in-view (an IntersectionObserver) —
-// scroll into the shop and the loop stops, nothing composites off-screen. No blur
-// filters, no drop-shadow filters. The section's scroll position is read from a
-// cached offset (no per-frame getBoundingClientRect / forced reflow).
+// PERF: the canvas frameloop is gated to in-view (`active`), so it only renders
+// while the finale is on-screen — it never runs at the same time as the vault
+// canvas (different scroll depths) or taxes the shop. DPR clamped low. Scroll read
+// from a cached offset (no per-frame layout). Mobile gets a static product shot.
 export default function SkyBridge() {
   const sectionRef = useRef<HTMLElement>(null)
-  const spotRef = useRef<HTMLDivElement>(null)
-  const sweepRef = useRef<HTMLDivElement>(null)
-  const haloRef = useRef<HTMLDivElement>(null)
-  const liftRef = useRef<HTMLDivElement>(null)
-  const shadowRef = useRef<HTMLDivElement>(null)
+  const scrollProgress = useRef(0) // 0..1, consumed by SkyScene's useFrame
   const copyRef = useRef<HTMLDivElement>(null)
+  const resolveRef = useRef<HTMLDivElement>(null)
 
-  const [reduced, setReduced] = useState(false)
   const [inView, setInView] = useState(false)
+  const [reduced, setReduced] = useState(false)
+  const [mobile, setMobile] = useState(false)
   const neyFired = useRef(false)
   const rafId = useRef(0)
-  const offset = useRef(0) // section top in document space
-  const span = useRef(1) // scrollable distance within the section
+  const offset = useRef(0)
+  const span = useRef(1)
 
+  // Mirror the vault's gating: only the small-coarse-pointer path skips WebGL;
+  // reduced-motion keeps the canvas but freezes the turntable/float.
   useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const update = () => setReduced(mq.matches)
-    update()
-    mq.addEventListener('change', update)
-    return () => mq.removeEventListener('change', update)
+    const mqR = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const mqM = window.matchMedia('(max-width: 640px) and (pointer: coarse)')
+    const u = () => {
+      setReduced(mqR.matches)
+      setMobile(mqM.matches)
+    }
+    u()
+    mqR.addEventListener('change', u)
+    mqM.addEventListener('change', u)
+    return () => {
+      mqR.removeEventListener('change', u)
+      mqM.removeEventListener('change', u)
+    }
   }, [])
 
-  // Cache the section's scroll geometry (no per-frame layout reads).
   useEffect(() => {
     const measure = () => {
       const el = sectionRef.current
@@ -68,7 +70,6 @@ export default function SkyBridge() {
     return () => window.removeEventListener('resize', measure)
   }, [])
 
-  // Gate everything to in-view + fire the ney cue once.
   useEffect(() => {
     const el = sectionRef.current
     if (!el) return
@@ -86,33 +87,20 @@ export default function SkyBridge() {
     return () => io.disconnect()
   }, [reduced])
 
-  // The scroll-scrub: one rAF, only while in view. Writes compositor-only props.
+  // Scroll driver — only while in view. Writes scrollProgress (the 3D scene reads
+  // it in useFrame) + the DOM overlay (copy fade + resolve-to-black).
   useEffect(() => {
     if (!inView) return
     let running = true
     const frame = () => {
       if (!running) return
       const raw = clamp01((window.scrollY - offset.current) / span.current)
-      const p = ease(raw)
-      if (spotRef.current) {
-        spotRef.current.style.opacity = (0.25 + p * 0.75).toFixed(3)
-        spotRef.current.style.transform = `scale(${(0.8 + p * 0.32).toFixed(3)})`
+      scrollProgress.current = raw
+      if (copyRef.current) {
+        const cFade = raw > 0.86 ? clamp01(1 - (raw - 0.86) / 0.14) : 1
+        copyRef.current.style.opacity = (clamp01(raw * 3) * cFade).toFixed(3)
       }
-      if (sweepRef.current) {
-        sweepRef.current.style.transform = `translate3d(${(-75 + p * 150).toFixed(1)}%,0,0)`
-        sweepRef.current.style.opacity = (0.5 * Math.sin(Math.PI * raw)).toFixed(3) // brightest mid-scrub
-      }
-      if (haloRef.current) haloRef.current.style.opacity = (0.15 + p * 0.85).toFixed(3)
-      if (liftRef.current) {
-        const lift = (1 - p) * 36 // starts low, rises into the light
-        liftRef.current.style.transform = `translate3d(0,${lift.toFixed(1)}px,0) scale(${(0.93 + p * 0.11).toFixed(3)})`
-      }
-      if (shadowRef.current) {
-        // as the pair rises, the contact shadow spreads + softens
-        shadowRef.current.style.transform = `translateX(-50%) scaleX(${(0.65 + p * 0.6).toFixed(3)})`
-        shadowRef.current.style.opacity = (0.5 - p * 0.28).toFixed(3)
-      }
-      if (copyRef.current) copyRef.current.style.opacity = clamp01(raw * 3).toFixed(3)
+      if (resolveRef.current) resolveRef.current.style.opacity = clamp01((raw - 0.9) / 0.1).toFixed(3)
       rafId.current = requestAnimationFrame(frame)
     }
     rafId.current = requestAnimationFrame(frame)
@@ -122,125 +110,44 @@ export default function SkyBridge() {
     }
   }, [inView])
 
-  const floatAnim = inView && !reduced
-
   return (
-    <section
-      ref={sectionRef}
-      aria-label="FitSole — the artifact"
-      className="relative h-[220vh] w-full"
-    >
-      {/* Pinned cinematic stage. The void + vignette are ONE static background
-          (single paint) — the cheap base everything else composites over. */}
-      <div
-        className="sticky top-0 h-screen w-full overflow-hidden bg-vault-black"
-        style={{
-          backgroundImage:
-            'radial-gradient(ellipse 78% 78% at 50% 50%, transparent 50%, rgba(0,0,0,0.7) 100%)',
-        }}
-      >
-        {/* Igniting gold spotlight (scroll-scrubbed opacity + scale). */}
-        <div
-          ref={spotRef}
-          aria-hidden
-          className="absolute inset-0 origin-center"
-          style={{
-            opacity: 0.25,
-            backgroundImage:
-              'radial-gradient(ellipse 42% 52% at 50% 45%, rgba(191,160,106,0.26), transparent 60%),' +
-              'radial-gradient(circle at 50% 40%, rgba(255,214,150,0.2), transparent 38%)',
-          }}
-        />
-
-        {/* Raking light sweep (scroll-scrubbed translateX). */}
-        <div
-          ref={sweepRef}
-          aria-hidden
-          className="absolute -inset-x-1/2 inset-y-0 will-change-transform"
-          style={{
-            opacity: 0,
-            backgroundImage:
-              'linear-gradient(105deg, transparent 42%, rgba(255,224,170,0.10) 50%, transparent 58%)',
-          }}
-        />
-
-        {/* Drifting gold dust — only while on-screen. */}
-        {floatAnim && (
-          <div aria-hidden className="absolute inset-0 overflow-hidden">
-            {MOTES.map((m, i) => (
-              <span
-                key={i}
-                className="vault-mote absolute rounded-full"
-                style={{
-                  left: `${m[0]}%`,
-                  top: `${m[1]}%`,
-                  width: m[2],
-                  height: m[2],
-                  background: 'rgba(232,202,142,0.85)',
-                  animationDelay: `${m[3]}s`,
-                  animationDuration: `${m[4]}s`,
-                }}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* The artifact */}
-        {HERO && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="relative mt-[6vh]">
-              {/* warm halo (scroll-scrubbed opacity) */}
-              <div
-                ref={haloRef}
-                aria-hidden
-                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] rounded-full"
-                style={{
-                  opacity: 0.15,
-                  background:
-                    'radial-gradient(circle at center, rgba(255,201,128,0.32), rgba(255,160,90,0.08) 45%, transparent 68%)',
-                }}
-              />
-              {/* lift wrapper (scroll-scrubbed translateY + scale) wraps the float */}
-              <div ref={liftRef} className="relative will-change-transform" style={{ transform: 'translate3d(0,36px,0) scale(0.93)' }}>
-                <div className={floatAnim ? 'sky-float' : ''}>
-                  <div className="relative w-[clamp(19rem,46vw,40rem)] aspect-[3/2]">
-                    <Image
-                      src={HERO.image}
-                      alt={`${HERO.brand} ${HERO.name}`}
-                      fill
-                      sizes="(max-width: 640px) 88vw, 46vw"
-                      priority
-                      className="object-contain"
-                    />
-                  </div>
-                </div>
+    <section ref={sectionRef} aria-label="FitSole — the artifact" className="relative h-[240vh] w-full">
+      <div className="sticky top-0 h-screen w-full overflow-hidden bg-vault-black">
+        {/* The real 3D finale (or a static product shot on the no-WebGL mobile path). */}
+        {mobile ? (
+          <div
+            className="absolute inset-0"
+            style={{ backgroundImage: 'radial-gradient(ellipse 62% 62% at 50% 46%, rgba(191,160,106,0.18), transparent 66%)' }}
+          >
+            {FALLBACK && (
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[56%] w-64 h-44">
+                <Image
+                  src={FALLBACK.image}
+                  alt={`${FALLBACK.brand} ${FALLBACK.name}`}
+                  fill
+                  sizes="256px"
+                  className="object-contain drop-shadow-[0_24px_44px_rgba(0,0,0,0.6)]"
+                />
               </div>
-              {/* contact shadow / plinth (scroll-scrubbed scaleX + opacity) */}
-              <div
-                ref={shadowRef}
-                aria-hidden
-                className="absolute left-1/2 bottom-[-4%] w-[78%] h-12 will-change-transform"
-                style={{
-                  opacity: 0.5,
-                  transform: 'translateX(-50%) scaleX(0.65)',
-                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.7) 0%, rgba(191,160,106,0.18) 40%, transparent 72%)',
-                }}
-              />
-            </div>
+            )}
+          </div>
+        ) : (
+          <div className="absolute inset-0">
+            <SkyScene scrollProgress={scrollProgress} active={inView} reduced={reduced} />
           </div>
         )}
 
-        {/* Copy + CTA (headline fades up early in the scrub) */}
+        {/* Copy + CTA (text-shadowed for legibility over the lit 3D scene). */}
         <div className="absolute inset-0 z-10 h-full flex flex-col items-center justify-between py-16 sm:py-20 px-6 text-center pointer-events-none">
           <div ref={copyRef} className="flex flex-col items-center gap-4 max-w-2xl" style={{ opacity: 0 }}>
-            <p className="text-[10px] sm:text-[11px] tracking-[0.45em] uppercase text-vault-gold/85">
+            <p className="text-[10px] sm:text-[11px] tracking-[0.45em] uppercase text-vault-gold/85 [text-shadow:0_1px_10px_rgba(0,0,0,0.6)]">
               FitSole · Cairo
             </p>
-            <h2 className="font-display text-4xl sm:text-6xl font-semibold tracking-display text-vault-cream leading-[0.98]">
+            <h2 className="font-display text-4xl sm:text-6xl font-semibold tracking-display text-vault-cream leading-[0.98] [text-shadow:0_2px_26px_rgba(0,0,0,0.6)]">
               The vault never closes.
             </h2>
             <span aria-hidden className="block w-16 h-px bg-gradient-to-r from-transparent via-vault-gold/60 to-transparent" />
-            <p className="text-sm sm:text-base text-vault-muted max-w-md leading-relaxed">
+            <p className="text-sm sm:text-base text-vault-cream/80 max-w-md leading-relaxed [text-shadow:0_1px_14px_rgba(0,0,0,0.7)]">
               Every pair authenticated in Cairo. The drops are below.
             </p>
           </div>
@@ -259,6 +166,10 @@ export default function SkyBridge() {
             </span>
           </div>
         </div>
+
+        {/* Resolve to black over the last 10% of the scrub → seamless seam into the
+            dark FeaturedUnboxing below (no hard cut at peak brightness). */}
+        <div ref={resolveRef} aria-hidden className="absolute inset-0 z-20 bg-vault-black pointer-events-none" style={{ opacity: 0 }} />
       </div>
     </section>
   )
