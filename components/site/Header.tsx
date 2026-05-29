@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn'
 import { useCart } from '@/lib/cart'
 import { useAudio } from '@/lib/audio'
 import CartDrawer from '@/components/commerce/CartDrawer'
+import QuickView from '@/components/commerce/QuickView'
 import SearchOverlay from '@/components/commerce/SearchOverlay'
 
 const navLinks = [
@@ -174,6 +175,7 @@ export default function Header() {
     </header>
     <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     <CartDrawer />
+    <QuickView />
     </>
   )
 }

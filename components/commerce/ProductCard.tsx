@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { cn } from '@/lib/cn'
 import { type Product, formatPrice, BRAND_COLORS } from '@/lib/products'
 import { useCart } from '@/lib/cart'
+import { openQuickView } from './QuickView'
 
 const BADGE_STYLES: Record<string, string> = {
   New: 'bg-vault-gold/20 text-vault-gold border-vault-gold/30',
@@ -87,6 +88,19 @@ export default function ProductCard({ product, featured = false, anchor = false 
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           className="object-contain p-4 transition-transform duration-500 ease-out group-hover:scale-[1.07]"
         />
+
+        {/* Quick-view trigger — opens the vitrine. Reveals on hover, but stays
+            keyboard-reachable (focus-visible) so it isn't a mouse-only feature. */}
+        <button
+          type="button"
+          onClick={() => openQuickView(product)}
+          aria-label={`Quick view ${product.brand} ${product.name}`}
+          className="absolute inset-0 z-[1] flex items-end justify-center pb-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100 focus-visible:opacity-100 focus:outline-none"
+        >
+          <span className="px-4 py-2 text-[10px] tracking-[0.2em] uppercase font-medium text-vault-cream bg-vault-black/65 backdrop-blur-sm border border-vault-gold/40 rounded-sm">
+            Quick view
+          </span>
+        </button>
 
         {/* Brand label */}
         <div className="absolute top-3 left-3">
