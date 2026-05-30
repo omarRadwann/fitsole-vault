@@ -1,17 +1,22 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer, MeshReflectorMaterial } from '@react-three/drei'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
+import { isIntegratedGpu, readGpuRenderer } from '@/lib/deviceTier'
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const smooth = (x: number) => x * x * (3 - 2 * x)
 
 const fallbackMat = new THREE.MeshStandardMaterial({ color: '#3A352E', roughness: 0.5, metalness: 0.3 })
+// Cheap static glossy floor for INTEGRATED GPUs — reflects the warm baked IBL (no
+// real-time reflection FBO pass). The contact shadows do the grounding. Discrete
+// GPUs get the live MeshReflectorMaterial reflection instead (see Scene).
+const staticFloorMat = new THREE.MeshStandardMaterial({ color: '#0B0908', roughness: 0.34, metalness: 0.6 })
 
 // Tight, dark contact shadow under each sole — RELIABLE grounding (the reflection
 // adds richness but is faint/GPU-dependent). Sits at the floor line (y≈0) so its
@@ -81,10 +86,12 @@ function Scene({
   scrollProgress,
   reduced,
   invalidateRef,
+  reflective,
 }: {
   scrollProgress: React.MutableRefObject<number>
   reduced: boolean
   invalidateRef: React.MutableRefObject<(() => void) | null>
+  reflective: boolean
 }) {
   const lOuter = useRef<THREE.Group>(null)
   const lBob = useRef<THREE.Group>(null)
@@ -159,19 +166,21 @@ function Scene({
           subtle + warm (mirror 0.5, rough 0.55, dark warm base) — NOT the sharp
           blue mirror from before. resolution 128 + no blur = one cheap FBO pass,
           and demand-mode means it only renders while scrolling. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} material={reflective ? undefined : staticFloorMat}>
         <circleGeometry args={[7, 48]} />
-        <MeshReflectorMaterial
-          resolution={128}
-          blur={[0, 0]}
-          mixBlur={0}
-          depthScale={0}
-          mixStrength={2.2}
-          mirror={0.78}
-          color="#100B08"
-          metalness={0.7}
-          roughness={0.32}
-        />
+        {reflective && (
+          <MeshReflectorMaterial
+            resolution={128}
+            blur={[0, 0]}
+            mixBlur={0}
+            depthScale={0}
+            mixStrength={2.2}
+            mirror={0.78}
+            color="#100B08"
+            metalness={0.7}
+            roughness={0.32}
+          />
+        )}
       </mesh>
 
       <Pair url={ASSETS.cloudmonster} faceSign={1} outerRef={lOuter} bobRef={lBob} shadowTex={shadowTex} />
@@ -200,6 +209,10 @@ export default function SkyScene({
   reduced: boolean
   invalidateRef: React.MutableRefObject<(() => void) | null>
 }) {
+  // Assume integrated (no live reflection) until a discrete GPU is confirmed in
+  // onCreated — same conservative default as the vault. Integrated GPUs (Iris Xe)
+  // get a cheap static glossy floor; discrete GPUs get the live reflection.
+  const [reflective, setReflective] = useState(false)
   return (
     <Canvas
       flat
@@ -210,9 +223,16 @@ export default function SkyScene({
       shadows={false}
       style={{ background: '#0A0908' }}
       aria-hidden="true"
+      onCreated={({ gl }) => {
+        try {
+          setReflective(!isIntegratedGpu(readGpuRenderer(gl.getContext())))
+        } catch {
+          /* keep the cheap static floor on any failure */
+        }
+      }}
     >
       <Suspense fallback={null}>
-        <Scene scrollProgress={scrollProgress} reduced={reduced} invalidateRef={invalidateRef} />
+        <Scene scrollProgress={scrollProgress} reduced={reduced} invalidateRef={invalidateRef} reflective={reflective} />
       </Suspense>
     </Canvas>
   )

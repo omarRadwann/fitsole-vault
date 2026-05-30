@@ -151,7 +151,7 @@ export default function VaultCanvas({ scrollProgress, active, reduced }: VaultCa
         {showStats && <Stats />}
         {debug && <DebugStats sink={sink} />}
         <Suspense fallback={<LoadingFallback />}>
-          <VaultScene scrollProgress={scrollProgress} active={active} tier={tier} reduced={reduced} />
+          <VaultScene scrollProgress={scrollProgress} active={active} tier={tier} reduced={reduced} integrated={integrated} />
         </Suspense>
       </Canvas>
       {debug && (

@@ -1233,9 +1233,14 @@ interface VaultSceneProps {
   // scroll-driven camera (user-controlled) and the screen videos (content) are
   // deliberately KEPT, so the vault still reads as the vault, just calmer.
   reduced?: boolean
+  // True on fill-rate-bound integrated GPUs (Iris Xe etc). Drops the full-screen
+  // Bloom pass for these GPUs even on 'standard' — a mipmapped bloom is one of the
+  // heaviest remaining per-frame costs on an iGPU. Discrete GPUs on 'standard' keep
+  // it (gating by GPU, not tier, so capable machines don't lose the glow).
+  integrated?: boolean
 }
 
-export default function VaultScene({ scrollProgress, active, tier, reduced = false }: VaultSceneProps) {
+export default function VaultScene({ scrollProgress, active, tier, reduced = false, integrated = false }: VaultSceneProps) {
   const cameraTarget = useMemo(() => new THREE.Vector3(), [])
   const cameraPos = useMemo(() => new THREE.Vector3(), [])
   const lookTarget = useMemo(() => new THREE.Vector3(), [])
@@ -1488,9 +1493,13 @@ export default function VaultScene({ scrollProgress, active, tier, reduced = fal
           tier === 'high' ? (
             <N8AO key="n8ao" aoSamples={16} aoRadius={0.4} intensity={1.3} distanceFalloff={1} color="#000000" halfRes depthAwareUpsampling />
           ) : null,
-          // Bloom on high + standard; dropped on safe (emissives still read via the
-          // ACES tonemap below — they just lose the soft halo).
-          tier !== 'safe' ? (
+          // Bloom on high + standard, but ONLY on a real (discrete) GPU — dropped on
+          // safe AND on every integrated GPU (Iris Xe etc), where a full-screen
+          // mipmapped bloom is one of the heaviest remaining per-frame passes. The
+          // emissives still read via the ACES tonemap below; they just lose the soft
+          // halo on the GPUs that can't afford it. Gating by GPU (not tier) keeps the
+          // glow for capable machines that also resolve to 'standard'.
+          tier !== 'safe' && !integrated ? (
             <Bloom key="bloom" mipmapBlur intensity={0.62} luminanceThreshold={0.78} luminanceSmoothing={0.3} />
           ) : null,
           <Vignette key="vignette" offset={0.3} darkness={0.7} />,
