@@ -1,5 +1,5 @@
-:HL["/fitsole-vault/_next/static/chunks/0oj4335ngus-q.css","style"]
+:HL["/fitsole-vault/_next/static/chunks/0pi94xyyic6mk.css","style"]
 :HL["/fitsole-vault/_next/static/media/2a65768255d6b625-s.p.14by5b4al-y~f.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/fitsole-vault/_next/static/media/70e3db2de7f94926-s.p.0~0iy9faq3424.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/fitsole-vault/_next/static/media/caa3a2e1cccd8315-s.p.09~u27dqhyhd6.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"wGAqLMG5sYKhmdFUwqH24"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"t6O4_s5-u1sWtSfFPxATQ"}
