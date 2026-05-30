@@ -241,6 +241,42 @@ html.lenis body {
   }
 }
 
+/* Sky-Moment "The Meeting": the gold impact burst when the two pairs meet. Ring +
+   flash + sparks stay hidden until the scroll driver toggles `.burst` on (one-shot,
+   re-armed on scroll-back). A snappy ~0.7s pop regardless of scroll speed. Killed
+   under reduced-motion by the global reduce block. */
+.meet-burst .ring,
+.meet-burst .ring2,
+.meet-burst .flash,
+.meet-burst .spark {
+  opacity: 0;
+}
+.meet-burst.burst .ring {
+  animation: meet-ring 0.7s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+.meet-burst.burst .ring2 {
+  animation: meet-ring 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) 0.06s forwards;
+}
+.meet-burst.burst .flash {
+  animation: meet-flash 0.5s ease-out forwards;
+}
+.meet-burst.burst .spark {
+  animation: meet-spark 0.7s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+@keyframes meet-ring {
+  0% { transform: scale(0.2); opacity: 0.85; }
+  100% { transform: scale(3.4); opacity: 0; }
+}
+@keyframes meet-flash {
+  0% { opacity: 0; }
+  18% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+@keyframes meet-spark {
+  0% { transform: rotate(var(--a)) translateX(8px); opacity: 1; }
+  100% { transform: rotate(var(--a)) translateX(190px); opacity: 0; }
+}
+
 /* Storefront scroll-reveal — sections fade + rise as they scroll into view, so
    the shop below the vault feels as alive as the cinematic walk. Pure CSS
    (scroll-driven animation-timeline): zero JS, works on server components, and
