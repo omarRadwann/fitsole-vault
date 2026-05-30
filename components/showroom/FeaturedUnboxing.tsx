@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/cn'
 import { withBase } from '@/lib/basePath'
+import { useBedSection } from '@/lib/audio'
 
 // Scroll-revealed cinematic unboxing (AI-generated: Nano Banana 2 still ->
 // Kling 3.0 motion). The video autoplays muted + looped ONLY while in view
@@ -13,6 +14,11 @@ export default function FeaturedUnboxing() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const inViewRef = useRef(false)
   const [shown, setShown] = useState(false)
+  // Reactive in-view (the ref alone isn't reactive) — drives the ambient bed so the
+  // music keeps playing while this video section is on screen, between the finale
+  // and the shop.
+  const [inView, setInView] = useState(false)
+  useBedSection(inView)
 
   useEffect(() => {
     const section = sectionRef.current
@@ -21,6 +27,7 @@ export default function FeaturedUnboxing() {
     const io = new IntersectionObserver(
       ([entry]) => {
         inViewRef.current = entry.isIntersecting
+        setInView(entry.isIntersecting)
         if (entry.isIntersecting) {
           setShown(true)
           video?.play().catch(() => {})

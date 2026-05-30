@@ -16,7 +16,7 @@ const fallbackMat = new THREE.MeshStandardMaterial({ color: '#3A352E', roughness
 // Cheap static glossy floor for INTEGRATED GPUs — reflects the warm baked IBL (no
 // real-time reflection FBO pass). The contact shadows do the grounding. Discrete
 // GPUs get the live MeshReflectorMaterial reflection instead (see Scene).
-const staticFloorMat = new THREE.MeshStandardMaterial({ color: '#0B0908', roughness: 0.34, metalness: 0.6 })
+const staticFloorMat = new THREE.MeshStandardMaterial({ color: '#0E0B08', roughness: 0.22, metalness: 0.9 })
 
 // Tight, dark contact shadow under each sole — RELIABLE grounding (the reflection
 // adds richness but is faint/GPU-dependent). Sits at the floor line (y≈0) so its
@@ -28,7 +28,7 @@ function useShadowTexture() {
     c.width = c.height = 128
     const ctx = c.getContext('2d')!
     const g = ctx.createRadialGradient(64, 64, 2, 64, 64, 64)
-    g.addColorStop(0, 'rgba(0,0,0,0.8)')
+    g.addColorStop(0, 'rgba(0,0,0,0.92)')
     g.addColorStop(0.45, 'rgba(0,0,0,0.42)')
     g.addColorStop(1, 'rgba(0,0,0,0)')
     ctx.fillStyle = g
@@ -97,6 +97,7 @@ function Scene({
   const lBob = useRef<THREE.Group>(null)
   const rOuter = useRef<THREE.Group>(null)
   const rBob = useRef<THREE.Group>(null)
+  const spotRef = useRef<THREE.SpotLight>(null)
   const shadowTex = useShadowTexture()
   const { camera, invalidate } = useThree()
 
@@ -124,17 +125,29 @@ function Scene({
 
     const enter = clamp01(p / 0.5)
     const e = smooth(enter)
-    const bob = reduced ? 0 : Math.abs(Math.sin(enter * Math.PI * 3)) * 0.07
-    // Scroll-driven turntable — FROZEN once the dive begins (p>0.86) so the spin and
-    // the camera push don't fight. ~1.8 scrubbable turns before it locks.
+    // IMPACT PUNCH — a sharp bell at the meeting (p≈0.5): the pairs recoil APART,
+    // pop in scale, and jolt up, synced with the spotlight swell + the CSS burst.
+    // Pure function of p → demand-safe (settles as you scroll on).
+    const impact = reduced ? 0 : Math.exp(-(((p - 0.5) / 0.045) ** 2))
+    const bob = (reduced ? 0 : Math.abs(Math.sin(enter * Math.PI * 3)) * 0.07) + impact * 0.05
+    const pop = 1 + impact * 0.05
+    // Scroll-driven turntable — eased + FROZEN once the dive begins (p>0.86) so the
+    // spin and the camera push don't fight. ~1.8 scrubbable turns before it locks.
     const present = clamp01((Math.min(p, 0.86) - 0.5) / 0.5)
-    const spinAngle = reduced ? 0 : present * Math.PI * 5
-    const lx = lerp(-5.0, -0.78, e)
-    const rx = lerp(5.0, 0.78, e)
+    const spinAngle = reduced ? 0 : smooth(present) * Math.PI * 5
+    const lx = lerp(-5.0, -0.78, e) - impact * 0.09
+    const rx = lerp(5.0, 0.78, e) + impact * 0.09
     if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = spinAngle }
     if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -spinAngle }
-    if (lBob.current) lBob.current.position.y = bob
-    if (rBob.current) rBob.current.position.y = bob
+    if (lBob.current) { lBob.current.position.y = bob; lBob.current.scale.setScalar(pop) }
+    if (rBob.current) { rBob.current.position.y = bob; rBob.current.scale.setScalar(pop) }
+
+    // Spotlight SWELL — a warm light pulse that blooms around the meeting (glow bell
+    // centred at p≈0.48) then settles for the presentation. Free, demand-safe.
+    if (spotRef.current) {
+      const glow = Math.exp(-(((p - 0.48) / 0.16) ** 2))
+      spotRef.current.intensity = 36 + glow * 20
+    }
   })
 
   return (
@@ -150,16 +163,20 @@ function Scene({
         <Lightformer intensity={4.4} color="#FFC178" position={[0, 5, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[8, 8, 1]} />
         <Lightformer intensity={2.8} color="#FFE7C6" position={[0, 1.8, 5]} scale={[8, 5, 1]} />
         <Lightformer intensity={2.4} color="#D7AE72" form="ring" position={[0, 3, 1.5]} scale={4} />
-        <Lightformer intensity={1.5} color="#C98B45" position={[-4, 2, 1]} rotation={[0, Math.PI / 2, 0]} scale={[5, 5, 1]} />
-        <Lightformer intensity={1.5} color="#C98B45" position={[4, 2, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 5, 1]} />
+        <Lightformer intensity={1.2} color="#A38765" position={[-4, 2, 1]} rotation={[0, Math.PI / 2, 0]} scale={[5, 5, 1]} />
+        <Lightformer intensity={1.2} color="#A38765" position={[4, 2, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 5, 1]} />
         <Lightformer intensity={1.0} color="#E8DAC2" position={[0, 2.6, -5]} scale={[9, 4, 1]} />
+        {/* A whisper of COOL rim — baked back/top edge light that separates the dark
+            silhouettes from the dark backdrop (premium dimension). It's an edge rim,
+            NOT a floor cast — frames=1 → zero per-frame cost. */}
+        <Lightformer intensity={0.7} color="#B6C8E8" position={[0, 3, -4]} scale={[6, 3, 1]} />
       </Environment>
 
       {/* ONE real-time light (iGPU fill-rate is the binding cost). IBL does the fill;
           this warm overhead spot adds the directional "spotlight pool" + floor
           falloff. ambient lifts shadows just enough to keep faces readable. */}
-      <ambientLight intensity={0.42} color="#FFE2C2" />
-      <spotLight position={[0, 5.6, 1.2]} angle={0.64} penumbra={1} intensity={42} distance={16} decay={2} color="#FFE3C2" />
+      <ambientLight intensity={0.30} color="#FFE2C2" />
+      <spotLight ref={spotRef} position={[0, 5.6, 1.2]} angle={0.64} penumbra={1} intensity={36} distance={16} decay={2} color="#FFE3C2" />
 
       {/* Glossy marble floor with a REAL (cheap) reflection — grounds the pairs in
           their own warm reflection + fills the lower frame with richness. Kept

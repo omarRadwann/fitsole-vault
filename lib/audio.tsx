@@ -6,6 +6,8 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
+  useId,
   type ReactNode,
 } from 'react'
 import { audioEngine } from './audioEngine'
@@ -19,6 +21,9 @@ interface AudioState {
   muted: boolean
   toggle: () => void
   hydrated: boolean
+  // Register/unregister a section as wanting the ambient bed on. The bed plays
+  // while ANY registered section is active (see useBedSection).
+  setBedSection: (id: string, active: boolean) => void
 }
 
 const AudioCtx = createContext<AudioState | null>(null)
@@ -35,6 +40,24 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   // there's no hydration divergence (same pattern as the cart).
   const [muted, setMuted] = useState(true)
   const [hydrated, setHydrated] = useState(false)
+
+  // Ambient-bed coordination. The bed plays while ANY cinematic section (vault,
+  // finale, unboxing video) is in view, and fades out once the user reaches the
+  // shop. Sections report in-view via useBedSection(); we OR them here so the
+  // engine's setBedActive is called from exactly ONE place. The id Set lives in a
+  // ref (stable callback, no stale closures); React state flips only on the 0↔n
+  // boundary, so sections toggling while another stays active cause no re-render.
+  const bedIdsRef = useRef<Set<string>>(new Set())
+  const [bedAny, setBedAny] = useState(false)
+  const setBedSection = useCallback((id: string, active: boolean) => {
+    const s = bedIdsRef.current
+    if (active) s.add(id)
+    else s.delete(id)
+    setBedAny((prev) => (s.size > 0) === prev ? prev : s.size > 0)
+  }, [])
+  useEffect(() => {
+    audioEngine.setBedActive(bedAny)
+  }, [bedAny])
 
   useEffect(() => {
     // Sound is ON by default for everyone (it stays silent until the first user
@@ -54,17 +77,23 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     setHydrated(true)
   }, [])
 
-  // One-time unlock on the first user gesture (iOS/Safari autoplay policy):
-  // create + resume the context and start the (silent-until-needed) bed.
+  // Unlock on the first VALID user gesture (autoplay policy). Chrome does NOT count
+  // scroll/wheel/touchmove as a user-activation for AudioContext.resume() — so a
+  // `{once:true}` listener gets consumed by the first scroll (resume stays blocked)
+  // and never retries, which is why audio used to start only on the speaker click.
+  // Fix: KEEP listening and retry unlock() on every gesture, detaching only once the
+  // context is actually running (a real activation — click/key/touch — landed).
   useEffect(() => {
     if (!hydrated) return
-    const onGesture = () => audioEngine.unlock()
-    const opts: AddEventListenerOptions = { once: true, passive: true }
-    // Includes scroll/wheel/touchmove so the music starts the moment the visitor
-    // scrolls (the natural first action here), not only on a click.
     const events = ['scroll', 'wheel', 'touchstart', 'touchmove', 'pointerdown', 'keydown'] as const
+    const opts: AddEventListenerOptions = { passive: true } // NOT once — re-arm until running
+    const detach = () => events.forEach((e) => window.removeEventListener(e, onGesture))
+    const onGesture = () => {
+      audioEngine.unlock()
+      if (audioEngine.running) detach() // resumed for real → stop listening
+    }
     events.forEach((e) => window.addEventListener(e, onGesture, opts))
-    return () => events.forEach((e) => window.removeEventListener(e, onGesture))
+    return detach
   }, [hydrated])
 
   const toggle = useCallback(() => {
@@ -86,7 +115,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AudioCtx.Provider value={{ muted, toggle, hydrated }}>
+    <AudioCtx.Provider value={{ muted, toggle, hydrated, setBedSection }}>
       {children}
     </AudioCtx.Provider>
   )
@@ -96,4 +125,20 @@ export function useAudio() {
   const ctx = useContext(AudioCtx)
   if (!ctx) throw new Error('useAudio must be used within AudioProvider')
   return ctx
+}
+
+/**
+ * Report this section's in-view state to the shared ambient-bed registry. The bed
+ * plays while ANY registered section is active and fades out when the last one
+ * leaves view — so the music carries across the vault → finale → video stretch and
+ * stops in the shop. Auto-unregisters on unmount. No-ops if no provider is present.
+ */
+export function useBedSection(active: boolean) {
+  const ctx = useContext(AudioCtx)
+  const id = useId()
+  const setBedSection = ctx?.setBedSection
+  useEffect(() => {
+    setBedSection?.(id, active)
+    return () => setBedSection?.(id, false)
+  }, [setBedSection, id, active])
 }

@@ -7,6 +7,7 @@ import VaultPreloader from './VaultPreloader'
 import Link from 'next/link'
 import Lenis from 'lenis'
 import { audioEngine } from '@/lib/audioEngine'
+import { useBedSection } from '@/lib/audio'
 import { withBase } from '@/lib/basePath'
 
 const VaultCanvas = dynamic(() => import('./VaultCanvas'), { ssr: false })
@@ -173,11 +174,12 @@ export default function VaultExperience() {
     }
   }, [])
 
-  // Ambient bed follows the vault: audible only while the WebGL vault is
-  // on-screen, and never on the static fallback / reduced-motion path.
-  useEffect(() => {
-    audioEngine.setBedActive(!fallback && vaultVisible)
-  }, [fallback, vaultVisible])
+  // Ambient bed: report the vault as a "bed section" (audible while the WebGL vault
+  // is on-screen, never on the static fallback). The shared registry in AudioProvider
+  // ORs this with the finale + video sections, so the music now carries ACROSS them
+  // instead of dying the instant the vault scrolls off. (Must NOT call setBedActive
+  // directly here — vaultVisible flips false past the vault and would kill the bed.)
+  useBedSection(!fallback && vaultVisible)
 
   useEffect(() => {
     if (fallback) return

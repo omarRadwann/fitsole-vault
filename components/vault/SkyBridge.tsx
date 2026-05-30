@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import Image from 'next/image'
 import { audioEngine } from '@/lib/audioEngine'
+import { useBedSection } from '@/lib/audio'
 
 // Real 3D finale (WebGL/R3F) — client-only, like VaultCanvas.
 const SkyScene = dynamic(() => import('./SkyScene'), { ssr: false })
@@ -54,10 +55,17 @@ export default function SkyBridge() {
   // scroll actually moves (the scene is a pure function of scroll). The big lag fix.
   const invalidateRef = useRef<(() => void) | null>(null)
   const lastRenderedP = useRef(-1)
+  // Damped scroll (mirrors VaultExperience) — smooths coarse mouse-wheel steps so
+  // the stride / spin / bob glide instead of snapping between discrete poses.
+  const damped = useRef(-1)
+  const lastT = useRef(0)
 
   const [inView, setInView] = useState(false)
   const [reduced, setReduced] = useState(false)
   const [mobile, setMobile] = useState(false)
+  // Keep the ambient music playing through the finale (not just the vault). The
+  // shared registry ORs this with the vault + video sections.
+  useBedSection(!mobile && inView)
   const neyFired = useRef(false)
   const armed = useRef(false)
   const rafId = useRef(0)
@@ -114,10 +122,18 @@ export default function SkyBridge() {
   useEffect(() => {
     if (!inView) return
     lastRenderedP.current = -1 // force a render on (re)entry
+    damped.current = -1 // re-seed the damped scroll (no intro sweep on re-entry)
+    lastT.current = performance.now()
     let running = true
     const frame = () => {
       if (!running) return
-      const p = clamp01((window.scrollY - offset.current) / span.current)
+      const raw = clamp01((window.scrollY - offset.current) / span.current)
+      const now = performance.now()
+      const dt = Math.min((now - lastT.current) / 1000, 0.1)
+      lastT.current = now
+      if (damped.current < 0) damped.current = raw // seed without a sweep
+      damped.current += (raw - damped.current) * (1 - Math.exp(-30 * dt))
+      const p = damped.current
       scrollProgress.current = p
       // Demand-render the 3D scene only when scroll moved (else it holds the last
       // frame at zero GPU cost). This + dpr=1 + one light is the lag fix.
@@ -197,10 +213,11 @@ export default function SkyBridge() {
             backgroundImage:
               // narrow volumetric beam down the centre (the spotlight made visible)
               'radial-gradient(ellipse 19% 64% at 50% -6%, rgba(255,217,151,0.16), transparent 66%),' +
-              // warm spotlight cone from above, reaching down through the shoes
-              'radial-gradient(ellipse 58% 82% at 50% 24%, rgba(255,197,114,0.20), transparent 60%),' +
-              // focused warm pool right at the shoes / floor (≈60% down)
-              'radial-gradient(ellipse 46% 28% at 50% 60%, rgba(255,180,96,0.17), transparent 64%),' +
+              // warm spotlight cone from above (champagne, not muddy amber)
+              'radial-gradient(ellipse 58% 82% at 50% 24%, rgba(255,224,180,0.16), transparent 60%),' +
+              // focused champagne pool at the shoes / floor (≈60% down) — lighter +
+              // cooler than the old amber, the strongest fix for the "brown haze"
+              'radial-gradient(ellipse 46% 28% at 50% 60%, rgba(255,210,150,0.12), transparent 64%),' +
               // deep vignette — corners + bottom fall to black for the niche depth
               'radial-gradient(ellipse 84% 86% at 50% 46%, transparent 42%, rgba(0,0,0,0.82) 100%)',
           }}
