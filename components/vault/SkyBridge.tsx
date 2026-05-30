@@ -47,6 +47,9 @@ export default function SkyBridge() {
   const copyRef = useRef<HTMLDivElement>(null)
   const floodRef = useRef<HTMLDivElement>(null)
   const resolveRef = useRef<HTMLDivElement>(null)
+  const chargeRef = useRef<HTMLDivElement>(null)
+  const auraRef = useRef<HTMLDivElement>(null)
+  const flareRef = useRef<HTMLDivElement>(null)
   // SkyScene runs frameloop="demand" — we call this to request a render ONLY when
   // scroll actually moves (the scene is a pure function of scroll). The big lag fix.
   const invalidateRef = useRef<(() => void) | null>(null)
@@ -131,6 +134,11 @@ export default function SkyBridge() {
           burstRef.current.classList.remove('burst')
         }
       }
+      // Charge — the centre gathers warm energy as the pairs close in (p .3→.48),
+      // then snaps off the instant the burst fires.
+      if (chargeRef.current) {
+        chargeRef.current.style.opacity = (clamp01((p - 0.3) / 0.18) * (p < 0.49 ? 1 : 0)).toFixed(3)
+      }
       if (copyRef.current) {
         const fin = clamp01((p - 0.54) / 0.12)
         const fout = p > 0.9 ? clamp01(1 - (p - 0.9) / 0.1) : 1
@@ -142,6 +150,19 @@ export default function SkyBridge() {
         const up = clamp01((p - 0.82) / 0.08)
         const down = p > 0.93 ? clamp01(1 - (p - 0.93) / 0.05) : 1
         floodRef.current.style.opacity = (up * down).toFixed(3)
+      }
+      // Charged auras behind the spinning pairs (presentation window .5→.86), faded
+      // out before the dive so they don't fight the flood.
+      if (auraRef.current) {
+        const ain = clamp01((p - 0.5) / 0.06)
+        const aout = p > 0.84 ? clamp01(1 - (p - 0.84) / 0.06) : 1
+        auraRef.current.style.opacity = (ain * aout).toFixed(3)
+      }
+      // Lens-flare starburst during the dive — rides with the gold flood.
+      if (flareRef.current) {
+        const fu = clamp01((p - 0.84) / 0.07)
+        const fd = p > 0.94 ? clamp01(1 - (p - 0.94) / 0.05) : 1
+        flareRef.current.style.opacity = (fu * fd).toFixed(3)
       }
       if (resolveRef.current) resolveRef.current.style.opacity = clamp01((p - 0.92) / 0.08).toFixed(3)
       rafId.current = requestAnimationFrame(frame)
@@ -185,6 +206,14 @@ export default function SkyBridge() {
           }}
         />
 
+        {/* Charged auras behind the spinning pairs — additive (screen) gold halos
+            that make the pairs feel powered-up during the presentation. Opacity
+            driven by the rAF; the slow scale-breathe is a cheap CSS keyframe. */}
+        <div ref={auraRef} aria-hidden className="absolute inset-0 pointer-events-none z-[3]" style={{ opacity: 0 }}>
+          <span className="sky-aura absolute rounded-full" style={{ left: '34%', top: '60%', width: '320px', height: '320px', mixBlendMode: 'screen', background: 'radial-gradient(circle, rgba(255,206,140,0.4), rgba(255,176,92,0.12) 44%, transparent 70%)' }} />
+          <span className="sky-aura absolute rounded-full" style={{ left: '66%', top: '60%', width: '320px', height: '320px', mixBlendMode: 'screen', background: 'radial-gradient(circle, rgba(255,206,140,0.4), rgba(255,176,92,0.12) 44%, transparent 70%)', animationDelay: '1.7s' }} />
+        </div>
+
         {/* Floating gold dust in the light beam — depth + atmosphere. Pure CSS
             transform/opacity drift (compositor-only, no blur, no main-thread cost);
             mounted only while in view and motion is allowed. */}
@@ -220,11 +249,24 @@ export default function SkyBridge() {
           }}
         />
 
-        {/* Gold impact burst at the meeting point */}
+        {/* Charge — warm energy gathers at the meeting point before impact. */}
+        <div
+          ref={chargeRef}
+          aria-hidden
+          className="absolute inset-0 pointer-events-none z-[5]"
+          style={{ opacity: 0, backgroundImage: 'radial-gradient(ellipse 28% 26% at 50% 60%, rgba(255,216,150,0.55), rgba(255,184,104,0.14) 46%, transparent 72%)' }}
+        />
+
+        {/* Gold impact burst at the meeting point — a cinematic event: a floor
+            shockwave + starburst rays + three expanding rings + a bright flash +
+            embers flung outward. All gated to the one-shot .burst class. */}
         <div ref={burstRef} aria-hidden className="meet-burst absolute left-1/2 top-[60%] pointer-events-none z-[5]" style={{ width: 0, height: 0 }}>
+          <div className="floorwave absolute" style={{ width: '440px', height: '96px', left: '-220px', top: '-48px', background: 'radial-gradient(ellipse at center, rgba(255,206,138,0.6), rgba(255,176,90,0.12) 55%, transparent 76%)', transformOrigin: 'center' }} />
+          <div className="ray-burst absolute" style={{ width: '600px', height: '600px', left: '-300px', top: '-300px', background: 'repeating-conic-gradient(from 0deg, rgba(255,222,154,0) 0deg 7deg, rgba(255,222,154,0.5) 7deg 8.4deg, rgba(255,222,154,0) 8.4deg 15deg)', WebkitMaskImage: 'radial-gradient(circle, transparent 9%, #000 24%, #000 44%, transparent 64%)', maskImage: 'radial-gradient(circle, transparent 9%, #000 24%, #000 44%, transparent 64%)' }} />
+          <div className="ring3 absolute rounded-full border border-vault-gold/25" style={{ width: '150px', height: '150px', left: '-75px', top: '-75px' }} />
           <div className="ring absolute rounded-full border-2 border-vault-gold/70" style={{ width: '180px', height: '180px', left: '-90px', top: '-90px' }} />
           <div className="ring2 absolute rounded-full border border-vault-gold/40" style={{ width: '110px', height: '110px', left: '-55px', top: '-55px' }} />
-          <div className="flash absolute rounded-full" style={{ width: '440px', height: '440px', left: '-220px', top: '-220px', background: 'radial-gradient(circle, rgba(255,236,184,0.8), rgba(255,192,112,0.22) 36%, transparent 62%)' }} />
+          <div className="flash absolute rounded-full" style={{ width: '560px', height: '560px', left: '-280px', top: '-280px', background: 'radial-gradient(circle, rgba(255,240,196,0.9), rgba(255,196,116,0.26) 34%, transparent 62%)' }} />
           {SPARKS.map((a, i) => (
             <span key={i} className="spark absolute rounded-full" style={{ width: '6px', height: '6px', left: '-3px', top: '-3px', background: 'rgba(255,226,154,0.95)', boxShadow: '0 0 9px 1px rgba(255,210,130,0.6)', ['--a']: `${a}deg` } as React.CSSProperties} />
           ))}
@@ -259,6 +301,20 @@ export default function SkyBridge() {
             opacity: 0,
             backgroundImage:
               'radial-gradient(ellipse 64% 58% at 50% 56%, rgba(255,216,150,0.97), rgba(255,176,86,0.55) 34%, rgba(120,70,20,0) 72%)',
+          }}
+        />
+        {/* Lens-flare starburst as we dive through the light — anamorphic streaks +
+            a bright core, riding with the flood. */}
+        <div
+          ref={flareRef}
+          aria-hidden
+          className="absolute inset-0 z-[19] pointer-events-none"
+          style={{
+            opacity: 0,
+            backgroundImage:
+              'radial-gradient(70% 2px at 50% 56%, rgba(255,246,222,0.9), transparent 72%),' +
+              'radial-gradient(2px 54% at 50% 56%, rgba(255,246,222,0.72), transparent 72%),' +
+              'radial-gradient(circle 64px at 50% 56%, rgba(255,248,230,0.96), transparent 76%)',
           }}
         />
         {/* …then resolves to black for a seamless seam into FeaturedUnboxing. */}

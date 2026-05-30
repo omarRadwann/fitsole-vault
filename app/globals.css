@@ -274,7 +274,51 @@ html.lenis body {
 }
 @keyframes meet-spark {
   0% { transform: rotate(var(--a)) translateX(8px); opacity: 1; }
-  100% { transform: rotate(var(--a)) translateX(190px); opacity: 0; }
+  100% { transform: rotate(var(--a)) translateX(260px); opacity: 0; }
+}
+
+/* ── "Meeting" impact, leveled up — a cinematic gold event. All compositor-only
+   (transform + opacity), transient (~0.9s), gated to the .burst class the scroll
+   driver toggles at the meeting. Adds a starburst RAY flare, a big 3rd shockwave
+   ring, and a FLOOR shockwave rushing outward along the marble. */
+.meet-burst .ring3,
+.meet-burst .ray-burst,
+.meet-burst .floorwave {
+  opacity: 0;
+}
+.meet-burst.burst .ring3 {
+  animation: meet-ring-big 0.95s cubic-bezier(0.16, 0.7, 0.26, 1) 0.03s forwards;
+}
+.meet-burst.burst .ray-burst {
+  animation: meet-rays 0.9s cubic-bezier(0.14, 0.7, 0.3, 1) forwards;
+}
+.meet-burst.burst .floorwave {
+  animation: meet-floorwave 0.85s cubic-bezier(0.12, 0.7, 0.3, 1) forwards;
+}
+@keyframes meet-ring-big {
+  0% { transform: scale(0.15); opacity: 0.7; }
+  100% { transform: scale(5.2); opacity: 0; }
+}
+@keyframes meet-rays {
+  0% { transform: scale(0.25) rotate(0deg); opacity: 0; }
+  22% { opacity: 0.8; }
+  100% { transform: scale(2.3) rotate(12deg); opacity: 0; }
+}
+@keyframes meet-floorwave {
+  0% { transform: scaleX(0.2) scaleY(0.7); opacity: 0.8; }
+  100% { transform: scaleX(3.4) scaleY(1); opacity: 0; }
+}
+
+/* Charged aura behind each pair during the presentation. Slow gold breathe;
+   opacity is driven by the scroll rAF (gated to the meeting→dive window). The
+   translate keeps it centered on the shoe while the scale pulses. */
+.sky-aura {
+  animation: sky-aura 3.4s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+@keyframes sky-aura {
+  0%, 100% { transform: translate(-50%, -50%) scale(0.9); }
+  50% { transform: translate(-50%, -50%) scale(1.1); }
 }
 
 /* Floating gold dust in the finale's light beam. Compositor-only (transform +
