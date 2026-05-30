@@ -2,4 +2,4 @@
 2:I[39756,["/fitsole-vault/_next/static/chunks/16mi3u~dwws3-.js","/fitsole-vault/_next/static/chunks/0d3shmwh5_nmn.js"],"default"]
 3:I[37457,["/fitsole-vault/_next/static/chunks/16mi3u~dwws3-.js","/fitsole-vault/_next/static/chunks/0d3shmwh5_nmn.js"],"default"]
 4:[]
-0:{"rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"isPartial":false,"staleTime":300,"varyParams":"$W4","buildId":"AOmC11HKZuCPUZ6G6OBjS"}
+0:{"rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"isPartial":false,"staleTime":300,"varyParams":"$W4","buildId":"UhW7j-1m7-TIB_9QdP7lO"}
