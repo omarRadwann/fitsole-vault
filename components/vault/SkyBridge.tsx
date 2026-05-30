@@ -9,6 +9,24 @@ import { audioEngine } from '@/lib/audioEngine'
 // Real 3D finale (WebGL/R3F) — client-only, like VaultCanvas.
 const SkyScene = dynamic(() => import('./SkyScene'), { ssr: false })
 const SPARKS = [0, 26, 52, 78, 104, 130, 156, 182, 208, 234, 260, 286, 312, 338]
+// Floating dust motes drifting in the light beam — deterministic (no Math.random →
+// SSR-safe, no hydration mismatch): x%, y%, size px, drift duration s, delay s.
+const MOTES = [
+  { x: 30, y: 72, s: 3, d: 15, delay: 0 },
+  { x: 44, y: 84, s: 2, d: 19, delay: 3 },
+  { x: 52, y: 66, s: 4, d: 13, delay: 6 },
+  { x: 61, y: 78, s: 2, d: 17, delay: 1 },
+  { x: 38, y: 58, s: 3, d: 21, delay: 8 },
+  { x: 68, y: 62, s: 2, d: 14, delay: 4 },
+  { x: 47, y: 48, s: 3, d: 18, delay: 2 },
+  { x: 56, y: 88, s: 3, d: 16, delay: 7 },
+  { x: 34, y: 40, s: 2, d: 22, delay: 5 },
+  { x: 64, y: 44, s: 3, d: 20, delay: 9 },
+  { x: 50, y: 30, s: 2, d: 24, delay: 3 },
+  { x: 42, y: 76, s: 2, d: 15, delay: 10 },
+  { x: 58, y: 54, s: 4, d: 12, delay: 6 },
+  { x: 71, y: 70, s: 2, d: 18, delay: 2 },
+]
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
 
 // "The Meeting" — the finale, now in real 3D. Two actual Tripo models of the ON
@@ -28,6 +46,10 @@ export default function SkyBridge() {
   const burstRef = useRef<HTMLDivElement>(null)
   const copyRef = useRef<HTMLDivElement>(null)
   const resolveRef = useRef<HTMLDivElement>(null)
+  // SkyScene runs frameloop="demand" — we call this to request a render ONLY when
+  // scroll actually moves (the scene is a pure function of scroll). The big lag fix.
+  const invalidateRef = useRef<(() => void) | null>(null)
+  const lastRenderedP = useRef(-1)
 
   const [inView, setInView] = useState(false)
   const [reduced, setReduced] = useState(false)
@@ -87,11 +109,18 @@ export default function SkyBridge() {
   // (burst at the meeting, copy fade, resolve-to-black). Only runs while in view.
   useEffect(() => {
     if (!inView) return
+    lastRenderedP.current = -1 // force a render on (re)entry
     let running = true
     const frame = () => {
       if (!running) return
       const p = clamp01((window.scrollY - offset.current) / span.current)
       scrollProgress.current = p
+      // Demand-render the 3D scene only when scroll moved (else it holds the last
+      // frame at zero GPU cost). This + dpr=1 + one light is the lag fix.
+      if (Math.abs(p - lastRenderedP.current) > 0.0004) {
+        lastRenderedP.current = p
+        invalidateRef.current?.()
+      }
       if (!reduced && burstRef.current) {
         if (p >= 0.48 && !armed.current) {
           armed.current = true
@@ -124,28 +153,67 @@ export default function SkyBridge() {
           <Image src="/images/scene-cloud.webp" alt="ON Cloudmonster" fill priority sizes="100vw" className="object-cover opacity-90" />
         ) : (
           <div className="absolute inset-0">
-            <SkyScene scrollProgress={scrollProgress} active={inView} reduced={reduced} />
+            <SkyScene scrollProgress={scrollProgress} active={inView} reduced={reduced} invalidateRef={invalidateRef} />
           </div>
         )}
 
-        {/* Cinematic atmosphere over the canvas (cheap CSS — replaces GPU post): a
-            warm gold spotlight pool from above + a vignette to deepen the niche. */}
+        {/* Cinematic atmosphere over the canvas (cheap CSS — replaces GPU post, all
+            static gradients = composited once, zero per-frame cost): a volumetric
+            light shaft + warm spotlight cone from above, a pool on the shoes/floor,
+            and a deep vignette that sinks the niche into black. */}
         <div
           aria-hidden
           className="absolute inset-0 pointer-events-none"
           style={{
             backgroundImage:
+              // narrow volumetric beam down the centre (the spotlight made visible)
+              'radial-gradient(ellipse 19% 64% at 50% -6%, rgba(255,217,151,0.16), transparent 66%),' +
               // warm spotlight cone from above, reaching down through the shoes
-              'radial-gradient(ellipse 58% 82% at 50% 24%, rgba(255,197,114,0.22), transparent 60%),' +
+              'radial-gradient(ellipse 58% 82% at 50% 24%, rgba(255,197,114,0.20), transparent 60%),' +
               // focused warm pool right at the shoes / floor (≈60% down)
-              'radial-gradient(ellipse 46% 28% at 50% 60%, rgba(255,178,94,0.17), transparent 64%),' +
-              // deep vignette — corners + bottom fall to black
-              'radial-gradient(ellipse 82% 84% at 50% 46%, transparent 44%, rgba(0,0,0,0.78) 100%)',
+              'radial-gradient(ellipse 46% 28% at 50% 60%, rgba(255,180,96,0.17), transparent 64%),' +
+              // deep vignette — corners + bottom fall to black for the niche depth
+              'radial-gradient(ellipse 84% 86% at 50% 46%, transparent 42%, rgba(0,0,0,0.82) 100%)',
+          }}
+        />
+
+        {/* Floating gold dust in the light beam — depth + atmosphere. Pure CSS
+            transform/opacity drift (compositor-only, no blur, no main-thread cost);
+            mounted only while in view and motion is allowed. */}
+        {inView && !reduced && (
+          <div aria-hidden className="absolute inset-0 pointer-events-none overflow-hidden z-[4]">
+            {MOTES.map((m, i) => (
+              <span
+                key={i}
+                className="sky-mote absolute rounded-full"
+                style={{
+                  left: `${m.x}%`,
+                  top: `${m.y}%`,
+                  width: `${m.s}px`,
+                  height: `${m.s}px`,
+                  background: 'radial-gradient(circle, rgba(255,224,170,0.9), rgba(255,196,120,0.25) 55%, transparent 75%)',
+                  animationDuration: `${m.d}s`,
+                  animationDelay: `${m.delay}s`,
+                } as React.CSSProperties}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Fine film grain — a touch of editorial texture over the whole frame
+            (static, low opacity, normal blend → cheap). */}
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none z-[4] opacity-[0.05] mix-blend-soft-light"
+          style={{
+            backgroundImage:
+              "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+            backgroundSize: '140px 140px',
           }}
         />
 
         {/* Gold impact burst at the meeting point */}
-        <div ref={burstRef} aria-hidden className="meet-burst absolute left-1/2 top-1/2 pointer-events-none z-[5]" style={{ width: 0, height: 0 }}>
+        <div ref={burstRef} aria-hidden className="meet-burst absolute left-1/2 top-[60%] pointer-events-none z-[5]" style={{ width: 0, height: 0 }}>
           <div className="ring absolute rounded-full border-2 border-vault-gold/70" style={{ width: '180px', height: '180px', left: '-90px', top: '-90px' }} />
           <div className="ring2 absolute rounded-full border border-vault-gold/40" style={{ width: '110px', height: '110px', left: '-55px', top: '-55px' }} />
           <div className="flash absolute rounded-full" style={{ width: '440px', height: '440px', left: '-220px', top: '-220px', background: 'radial-gradient(circle, rgba(255,236,184,0.8), rgba(255,192,112,0.22) 36%, transparent 62%)' }} />

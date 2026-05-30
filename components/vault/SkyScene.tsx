@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer } from '@react-three/drei'
 import * as THREE from 'three'
@@ -59,7 +59,7 @@ function Pair({
             normalizeTo={1.55}
             seat="bottom"
             rotation={[0, face, 0]}
-            envMapIntensity={1.2}
+            envMapIntensity={1.35}
             fallback={
               <mesh material={fallbackMat} position={[0, 0.45, 0]}>
                 <boxGeometry args={[1, 0.45, 0.36]} />
@@ -76,27 +76,50 @@ function Pair({
   )
 }
 
-function Scene({ scrollProgress, reduced }: { scrollProgress: React.MutableRefObject<number>; reduced: boolean }) {
+function Scene({
+  scrollProgress,
+  reduced,
+  invalidateRef,
+}: {
+  scrollProgress: React.MutableRefObject<number>
+  reduced: boolean
+  invalidateRef: React.MutableRefObject<(() => void) | null>
+}) {
   const lOuter = useRef<THREE.Group>(null)
   const lBob = useRef<THREE.Group>(null)
   const rOuter = useRef<THREE.Group>(null)
   const rBob = useRef<THREE.Group>(null)
   const shadowTex = useShadowTexture()
-  const spin = useRef(0)
-  const { camera } = useThree()
+  const { camera, invalidate } = useThree()
 
-  useFrame((_, dt) => {
+  // Expose invalidate() to SkyBridge so its scroll rAF can request a render ONLY
+  // when scroll actually moves (frameloop="demand"). Render once on mount.
+  useEffect(() => {
+    invalidateRef.current = invalidate
+    invalidate()
+    return () => {
+      invalidateRef.current = null
+    }
+  }, [invalidate, invalidateRef])
+
+  // The whole scene is a PURE FUNCTION of scroll progress (walk, bob, AND the
+  // turntable). No time accumulation → nothing animates when you stop scrolling →
+  // demand-mode holds the last frame at zero GPU cost. This is the lag fix.
+  useFrame(() => {
     camera.lookAt(0, 0.62, 0)
     const p = scrollProgress.current
     const enter = clamp01(p / 0.5)
     const e = smooth(enter)
     const bob = reduced ? 0 : Math.abs(Math.sin(enter * Math.PI * 3)) * 0.07
-    // After the meeting, a slow turntable presents both pairs (frozen if reduced).
-    if (!reduced && p > 0.55) spin.current += Math.min(dt, 0.05) * 0.3
+    // Scroll-DRIVEN turntable: once they meet (p>0.5) they spin proportionally to
+    // scroll — fast + fully scrubbable (scroll on = spin on, scroll back = unspin).
+    // ~2.5 turns by the end. Counter-rotating so the pair presents to each other.
+    const present = clamp01((p - 0.5) / 0.5)
+    const spinAngle = reduced ? 0 : present * Math.PI * 5
     const lx = lerp(-5.0, -0.78, e)
     const rx = lerp(5.0, 0.78, e)
-    if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = spin.current }
-    if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -spin.current }
+    if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = spinAngle }
+    if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -spinAngle }
     if (lBob.current) lBob.current.position.y = bob
     if (rBob.current) rBob.current.position.y = bob
   })
@@ -104,32 +127,32 @@ function Scene({ scrollProgress, reduced }: { scrollProgress: React.MutableRefOb
   return (
     <>
       <color attach="background" args={['#0A0807']} />
-      <fog attach="fog" args={['#0A0705', 4, 11]} />
+      <fog attach="fog" args={['#0A0705', 4.5, 12]} />
 
-      {/* Baked IBL — WARM-dominant (gold key overhead + brass ring + warm fill); the
-          cool source is tiny (just a hint of rim) so the marble floor reads dark-warm,
-          not a blue mirror. frames=1 → zero per-frame cost. */}
+      {/* Baked IBL — the scene's RICHNESS lives here, and it's FREE per-frame
+          (frames=1 bakes once into a cubemap; cost is independent of lightformer
+          count). Warm/brass-dominant: gold key overhead + a strong warm FRONT panel
+          that lights the shoes' faces (so we need almost no real-time lights) + a
+          brass ring for sheen + a warm back glow for depth. Zero blue. */}
       <Environment resolution={256} frames={1}>
-        <Lightformer intensity={4.2} color="#FFBE74" position={[0, 5, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[7, 7, 1]} />
-        <Lightformer intensity={2.0} color="#FFE6C2" position={[0, 2, 5]} scale={[7, 4, 1]} />
-        <Lightformer intensity={1.9} color="#C9A36A" form="ring" position={[0, 3, 1]} scale={3.6} />
-        <Lightformer intensity={0.8} color="#E8DAC2" position={[0, 2.6, -5]} scale={[9, 4, 1]} />
+        <Lightformer intensity={4.4} color="#FFC178" position={[0, 5, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[8, 8, 1]} />
+        <Lightformer intensity={2.8} color="#FFE7C6" position={[0, 1.8, 5]} scale={[8, 5, 1]} />
+        <Lightformer intensity={2.4} color="#D7AE72" form="ring" position={[0, 3, 1.5]} scale={4} />
+        <Lightformer intensity={1.5} color="#C98B45" position={[-4, 2, 1]} rotation={[0, Math.PI / 2, 0]} scale={[5, 5, 1]} />
+        <Lightformer intensity={1.5} color="#C98B45" position={[4, 2, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 5, 1]} />
+        <Lightformer intensity={1.0} color="#E8DAC2" position={[0, 2.6, -5]} scale={[9, 4, 1]} />
       </Environment>
 
-      <ambientLight intensity={0.18} color="#FFE2C2" />
-      {/* Warm gold overhead key — the render's spotlight pool on shoes + floor. */}
-      <spotLight position={[0, 5.6, 1.0]} angle={0.62} penumbra={1} intensity={42} distance={16} decay={2} color="#FFE3C2" />
-      {/* Dedicated warm KEY from front-above (camera side) — lights the shoes' faces
-          warmly so they sit IN the gold pool, not flat in a dark mid-zone. */}
-      <spotLight position={[0, 3.4, 3.6]} angle={0.7} penumbra={0.9} intensity={26} distance={12} decay={2} color="#FFD49A" />
-      {/* Warm low front fill — lifts the camera-facing side + warms the floor pool. */}
-      <pointLight position={[0, 0.5, 2.4]} intensity={4.0} color="#FFCF9A" distance={5.5} decay={2} />
-      {/* Warm-neutral back rim (NO blue) — edges the dark A.E.1 from the void. */}
-      <pointLight position={[0, 3.0, -3.0]} intensity={1.4} color="#FFE6CC" distance={5} decay={2} />
+      {/* ONE real-time light only (iGPU fill-rate is the binding cost — every
+          dynamic light is a full per-fragment loop over the big floor + shoes).
+          The IBL above does the fill; this warm overhead spot adds the directional
+          "spotlight pool" drama + falloff on the floor. ambient lifts the shadows. */}
+      <ambientLight intensity={0.5} color="#FFE2C2" />
+      <spotLight position={[0, 5.6, 1.2]} angle={0.64} penumbra={1} intensity={40} distance={16} decay={2} color="#FFE3C2" />
 
-      {/* Dark glossy marble floor (reflects the Environment) */}
+      {/* Dark glossy marble floor (reflects the warm Environment) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} material={floorMat}>
-        <circleGeometry args={[9, 64]} />
+        <circleGeometry args={[7, 48]} />
       </mesh>
 
       <Pair url={ASSETS.cloudmonster} faceSign={1} outerRef={lOuter} bobRef={lBob} shadowTex={shadowTex} />
@@ -138,24 +161,30 @@ function Scene({ scrollProgress, reduced }: { scrollProgress: React.MutableRefOb
   )
 }
 
-// Canvas wrapper (dynamic-imported by SkyBridge, ssr:false). frameloop gated to
-// in-view so it only renders on-screen (never alongside the vault canvas / the
-// shop). Lean: low DPR, no postprocessing, no real shadows. The cinematic gold
-// glow + vignette + the meeting burst are CSS overlays in SkyBridge.
+// Canvas wrapper (dynamic-imported by SkyBridge, ssr:false).
+// PERF (iGPU-first — this is a 2nd WebGL canvas on top of the vault's):
+//   • frameloop="demand" + invalidate-on-scroll → renders ONLY while scrolling.
+//     The scene is a pure function of scroll, so a held frame costs ZERO GPU.
+//   • dpr pinned to 1.0 → no 1.44× fill-rate blow-up on integrated GPUs.
+//   • ONE real-time light (warm overhead spot); the rest is baked IBL (free).
+//   • no postprocessing, no real shadows. Gold glow / vignette / shafts / dust /
+//     grain + the meeting burst are all cheap CSS overlays in SkyBridge.
 export default function SkyScene({
   scrollProgress,
   active,
   reduced,
+  invalidateRef,
 }: {
   scrollProgress: React.MutableRefObject<number>
   active: boolean
   reduced: boolean
+  invalidateRef: React.MutableRefObject<(() => void) | null>
 }) {
   return (
     <Canvas
       flat
-      frameloop={active ? 'always' : 'never'}
-      dpr={[1, 1.2]}
+      frameloop={active ? 'demand' : 'never'}
+      dpr={1}
       camera={{ position: [0, 0.9, 4.3], fov: 42, near: 0.1, far: 40 }}
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       shadows={false}
@@ -163,7 +192,7 @@ export default function SkyScene({
       aria-hidden="true"
     >
       <Suspense fallback={null}>
-        <Scene scrollProgress={scrollProgress} reduced={reduced} />
+        <Scene scrollProgress={scrollProgress} reduced={reduced} invalidateRef={invalidateRef} />
       </Suspense>
     </Canvas>
   )
