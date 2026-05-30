@@ -45,6 +45,7 @@ export default function SkyBridge() {
   const scrollProgress = useRef(0) // 0..1, consumed by SkyScene's useFrame
   const burstRef = useRef<HTMLDivElement>(null)
   const copyRef = useRef<HTMLDivElement>(null)
+  const floodRef = useRef<HTMLDivElement>(null)
   const resolveRef = useRef<HTMLDivElement>(null)
   // SkyScene runs frameloop="demand" — we call this to request a render ONLY when
   // scroll actually moves (the scene is a pure function of scroll). The big lag fix.
@@ -135,7 +136,14 @@ export default function SkyBridge() {
         const fout = p > 0.9 ? clamp01(1 - (p - 0.9) / 0.1) : 1
         copyRef.current.style.opacity = (fin * fout).toFixed(3)
       }
-      if (resolveRef.current) resolveRef.current.style.opacity = clamp01((p - 0.9) / 0.1).toFixed(3)
+      // End transition: a warm gold flood blooms (p .82→.90) as the camera dives in,
+      // then hands off to the black resolve (p .92→1) for a seamless seam into the shop.
+      if (floodRef.current) {
+        const up = clamp01((p - 0.82) / 0.08)
+        const down = p > 0.93 ? clamp01(1 - (p - 0.93) / 0.05) : 1
+        floodRef.current.style.opacity = (up * down).toFixed(3)
+      }
+      if (resolveRef.current) resolveRef.current.style.opacity = clamp01((p - 0.92) / 0.08).toFixed(3)
       rafId.current = requestAnimationFrame(frame)
     }
     rafId.current = requestAnimationFrame(frame)
@@ -242,7 +250,18 @@ export default function SkyBridge() {
           </div>
         </div>
 
-        {/* Resolve to black → seamless seam into FeaturedUnboxing */}
+        {/* End transition — warm gold flood + flare blooms as the camera dives in… */}
+        <div
+          ref={floodRef}
+          aria-hidden
+          className="absolute inset-0 z-[18] pointer-events-none"
+          style={{
+            opacity: 0,
+            backgroundImage:
+              'radial-gradient(ellipse 64% 58% at 50% 56%, rgba(255,216,150,0.97), rgba(255,176,86,0.55) 34%, rgba(120,70,20,0) 72%)',
+          }}
+        />
+        {/* …then resolves to black for a seamless seam into FeaturedUnboxing. */}
         <div ref={resolveRef} aria-hidden className="absolute inset-0 z-20 bg-vault-black pointer-events-none" style={{ opacity: 0 }} />
       </div>
     </section>
