@@ -85,12 +85,16 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   // context is actually running (a real activation — click/key/touch — landed).
   useEffect(() => {
     if (!hydrated) return
-    const events = ['scroll', 'wheel', 'touchstart', 'touchmove', 'pointerdown', 'keydown'] as const
+    const events = ['scroll', 'wheel', 'touchstart', 'touchmove', 'pointerdown', 'keydown', 'click', 'mousedown'] as const
     const opts: AddEventListenerOptions = { passive: true } // NOT once — re-arm until running
     const detach = () => events.forEach((e) => window.removeEventListener(e, onGesture))
     const onGesture = () => {
       audioEngine.unlock()
-      if (audioEngine.running) detach() // resumed for real → stop listening
+      // ctx.resume() is async — `running` is usually still false the instant after
+      // unlock() even on a VALID gesture. Re-check on the next tick so a single
+      // valid click/keypress detaches cleanly (don't depend on a 2nd gesture).
+      if (audioEngine.running) detach()
+      else setTimeout(() => { if (audioEngine.running) detach() }, 80)
     }
     events.forEach((e) => window.addEventListener(e, onGesture, opts))
     return detach

@@ -132,7 +132,15 @@ export default function SkyBridge() {
       const dt = Math.min((now - lastT.current) / 1000, 0.1)
       lastT.current = now
       if (damped.current < 0) damped.current = raw // seed without a sweep
-      damped.current += (raw - damped.current) * (1 - Math.exp(-30 * dt))
+      // LIGHT damping (snappy ~3 frames) — smooths a coarse mouse-wheel tick without
+      // the laggy trail of heavy damping. Once within ε, SNAP to the target so the
+      // scene stops demand-rendering (no asymptotic tail of renders — that tail was
+      // the integrated-GPU "lag"), forcing one final invalidate so the snap draws.
+      damped.current += (raw - damped.current) * (1 - Math.exp(-70 * dt))
+      if (Math.abs(raw - damped.current) < 0.002 && damped.current !== raw) {
+        damped.current = raw
+        lastRenderedP.current = -1 // force the final exact-pose render
+      }
       const p = damped.current
       scrollProgress.current = p
       // Demand-render the 3D scene only when scroll moved (else it holds the last

@@ -250,6 +250,11 @@ export default function VaultExperience() {
         if (vaultVisibleRef.current) {
           vaultVisibleRef.current = false
           setVaultVisible(false)
+          // Kill the scroll-velocity "wind": this fast-path stops calling setMotion,
+          // so without this the wind gain FREEZES at its last (non-zero, if you
+          // scrolled in fast) value and drones like an engine through the finale +
+          // video below. Ramp it to silence once on the way out.
+          audioEngine.setMotion(0)
         }
         lastT = now
         rafRef.current = requestAnimationFrame(tick)
@@ -359,6 +364,7 @@ export default function VaultExperience() {
       clearTimeout(t1)
       clearTimeout(t2)
       window.removeEventListener('resize', onVaultResize)
+      audioEngine.setMotion(0) // defense in depth — never leave the wind droning
       lenis.destroy()
     }
   }, [fallback])
