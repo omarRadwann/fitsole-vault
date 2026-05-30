@@ -9,6 +9,10 @@ const TRIPO = `${BASE_PATH}/models/tripo`
 export const ASSETS = {
   // User-uploaded hero sneaker (meshopt-compressed: 6.7MB → 1.56MB, 219k tris kept).
   heroSneaker: `${TRIPO}/hero_uploaded_v01.optimized.glb`,
+  // Finale pairs — Tripo Smart-Mesh image-to-3D of the real ON Cloudmonster + Adidas
+  // A.E. 1, optimized (webp 1024 + meshopt: ~5MB → ~270KB each). Used in SkyScene.
+  cloudmonster: `${TRIPO}/cloudmonster_v01.optimized.glb`,
+  ae1: `${TRIPO}/ae1_v01.optimized.glb`,
 } as const
 
 // Lightweight sneakers displayed across the drop-wall shelves (cycled).
