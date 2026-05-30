@@ -135,8 +135,12 @@ export default function SkyBridge() {
           className="absolute inset-0 pointer-events-none"
           style={{
             backgroundImage:
-              'radial-gradient(ellipse 50% 42% at 50% 8%, rgba(255,200,120,0.16), transparent 60%),' +
-              'radial-gradient(ellipse 85% 85% at 50% 52%, transparent 56%, rgba(0,0,0,0.55) 100%)',
+              // warm spotlight cone from above, reaching down through the shoes
+              'radial-gradient(ellipse 58% 82% at 50% 24%, rgba(255,197,114,0.22), transparent 60%),' +
+              // focused warm pool right at the shoes / floor (≈60% down)
+              'radial-gradient(ellipse 46% 28% at 50% 60%, rgba(255,178,94,0.17), transparent 64%),' +
+              // deep vignette — corners + bottom fall to black
+              'radial-gradient(ellipse 82% 84% at 50% 46%, transparent 44%, rgba(0,0,0,0.78) 100%)',
           }}
         />
 
