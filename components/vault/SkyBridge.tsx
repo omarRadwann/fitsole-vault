@@ -51,6 +51,7 @@ export default function SkyBridge() {
   const chargeRef = useRef<HTMLDivElement>(null)
   const auraRef = useRef<HTMLDivElement>(null)
   const flareRef = useRef<HTMLDivElement>(null)
+  const startRef = useRef<HTMLDivElement>(null) // black veil at entry → the stage rises from the vault's dark
   // SkyScene runs frameloop="demand" — we call this to request a render ONLY when
   // scroll actually moves (the scene is a pure function of scroll). The big lag fix.
   const invalidateRef = useRef<(() => void) | null>(null)
@@ -158,6 +159,9 @@ export default function SkyBridge() {
           burstRef.current.classList.remove('burst')
         }
       }
+      // START: the finale rises from black — a full-black veil at p=0 fading out by
+      // p≈0.07, so it emerges from the vault's darkness instead of popping in.
+      if (startRef.current) startRef.current.style.opacity = (1 - clamp01(p / 0.07)).toFixed(3)
       // Charge — the centre gathers warm energy as the pairs close in (p .3→.48),
       // then snaps off the instant the burst fires.
       if (chargeRef.current) {
@@ -316,6 +320,10 @@ export default function SkyBridge() {
             </Link>
           </div>
         </div>
+
+        {/* Start veil — the finale rises out of the vault's black (opacity driven by
+            the rAF; full black at entry, gone by p≈0.07). */}
+        <div ref={startRef} aria-hidden className="absolute inset-0 z-[17] bg-vault-black pointer-events-none" style={{ opacity: 1 }} />
 
         {/* End transition — warm gold flood + flare blooms as the camera dives in… */}
         <div

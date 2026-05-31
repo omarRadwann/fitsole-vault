@@ -1365,7 +1365,7 @@ export default function VaultScene({ scrollProgress, active, tier, reduced = fal
           cost. resolution 512 = cleaner reflections; the back-corridor formers
           keep the deep end (brands / membership) lit now that the real corridor
           fill lights are gone. NEVER raise frames — that re-bakes every frame. */}
-      <Environment resolution={tier === 'high' ? 1536 : tier === 'standard' ? 512 : 256} frames={1}>
+      <Environment resolution={tier === 'high' ? 1536 : tier === 'standard' && !integrated ? 512 : 256} frames={1}>
         <Lightformer intensity={2.2} color="#FFB366" position={[0, 5, -4]} scale={[12, 1.5, 1]} />
         <Lightformer intensity={1.4} color="#FFF4E0" position={[0, 5, -9]} scale={[8, 1, 1]} />
         <Lightformer intensity={1} color="#6E8AB8" position={[0, 3, 13]} scale={[10, 4, 1]} />
