@@ -2,7 +2,9 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Environment, Lightformer, MeshReflectorMaterial } from '@react-three/drei'
+import { Environment, Lightformer, MeshReflectorMaterial, ContactShadows } from '@react-three/drei'
+import { EffectComposer, Bloom, ToneMapping, SMAA } from '@react-three/postprocessing'
+import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
@@ -13,23 +15,66 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const smooth = (x: number) => x * x * (3 - 2 * x)
 
 const fallbackMat = new THREE.MeshStandardMaterial({ color: '#3A352E', roughness: 0.5, metalness: 0.3 })
-// Cheap static glossy floor for INTEGRATED GPUs — reflects the warm baked IBL (no
-// real-time reflection FBO pass). The contact shadows do the grounding. Discrete
+// Glossy dark-marble floor for INTEGRATED GPUs (no live FBO reflection). Roughness/
+// metalness tuned so the warm IBL + the light-pool below read as polished stone,
+// not the dead-black void the old #0E0B08@0.22 collapsed to in capture. Discrete
 // GPUs get the live MeshReflectorMaterial reflection instead (see Scene).
-const staticFloorMat = new THREE.MeshStandardMaterial({ color: '#0E0B08', roughness: 0.22, metalness: 0.9 })
+const staticFloorMat = new THREE.MeshStandardMaterial({ color: '#120D09', roughness: 0.3, metalness: 0.85 })
 
-// Tight, dark contact shadow under each sole — RELIABLE grounding (the reflection
-// adds richness but is faint/GPU-dependent). Sits at the floor line (y≈0) so its
-// own reflection is coincident with it → reads as contact darkening, never a
-// floating smudge. Tighter + darker than a generic blob = a firm "planted" look.
+// Warm champagne "pool of light" laid on the floor under the meeting point, so the
+// pairs read as standing IN a lit pool on a real floor — the single cheapest fix
+// for the "floating in a void" look. One canvas texture, additive, demand-cheap.
+function usePoolTexture() {
+  return useMemo(() => {
+    const c = document.createElement('canvas')
+    c.width = c.height = 256
+    const ctx = c.getContext('2d')!
+    const g = ctx.createRadialGradient(128, 128, 4, 128, 128, 128)
+    g.addColorStop(0, 'rgba(255,212,156,0.55)')
+    g.addColorStop(0.42, 'rgba(255,186,118,0.2)')
+    g.addColorStop(1, 'rgba(255,176,100,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 256, 256)
+    const t = new THREE.CanvasTexture(c)
+    t.colorSpace = THREE.SRGBColorSpace
+    return t
+  }, [])
+}
+
+// Backdrop gradient on a far plane — a faint warm floor-glow rising into darkness
+// gives the void DEPTH (a sense of a back wall / horizon) without a literal skyline,
+// so the restrained-luxury "room" reads as a place. Within the fog range so it
+// blends to the background colour up top. Cheap (one 16×256 texture).
+function useBackdropTexture() {
+  return useMemo(() => {
+    const c = document.createElement('canvas')
+    c.width = 16
+    c.height = 256
+    const ctx = c.getContext('2d')!
+    const g = ctx.createLinearGradient(0, 256, 0, 0) // bottom → top
+    g.addColorStop(0, 'rgba(48,33,20,1)') // warm lift near the floor line
+    g.addColorStop(0.4, 'rgba(18,13,9,1)')
+    g.addColorStop(1, 'rgba(8,6,5,1)') // fades into the void up top
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 16, 256)
+    const t = new THREE.CanvasTexture(c)
+    t.colorSpace = THREE.SRGBColorSpace
+    return t
+  }, [])
+}
+
+// Soft elliptical AO blob — the grounding on INTEGRATED GPUs (where real-time
+// ContactShadows are gated off to protect the demand-render budget). Wider than
+// tall to match a shoe's footprint; feathered so it reads as a soft contact
+// darkening, never a hard disc.
 function useShadowTexture() {
   return useMemo(() => {
     const c = document.createElement('canvas')
     c.width = c.height = 128
     const ctx = c.getContext('2d')!
     const g = ctx.createRadialGradient(64, 64, 2, 64, 64, 64)
-    g.addColorStop(0, 'rgba(0,0,0,0.92)')
-    g.addColorStop(0.45, 'rgba(0,0,0,0.42)')
+    g.addColorStop(0, 'rgba(0,0,0,0.82)')
+    g.addColorStop(0.5, 'rgba(0,0,0,0.34)')
     g.addColorStop(1, 'rgba(0,0,0,0)')
     ctx.fillStyle = g
     ctx.fillRect(0, 0, 128, 128)
@@ -37,10 +82,10 @@ function useShadowTexture() {
   }, [])
 }
 
-// One pair: an outer group (walk X + turntable Y) → a bob group (step bounce) →
-// the model (rotated to face inward). faceSign +1 faces +X (right), -1 faces -X.
-// Grounding now comes from the real floor REFLECTION (MeshReflectorMaterial below)
-// — no fake shadow plane (it would float above its own reflection and read worse).
+// One pair: an outer group (walk X + present yaw) → a bob group (step bounce +
+// lean-into-travel + heel-toe rock) → the model (rotated to face inward).
+// faceSign +1 faces +X (right), -1 faces -X. Grounding is the scene's real
+// ContactShadows + the warm floor pool — no fake per-shoe shadow plane.
 function Pair({
   url,
   faceSign,
@@ -52,7 +97,10 @@ function Pair({
   faceSign: number
   outerRef: React.RefObject<THREE.Group | null>
   bobRef: React.RefObject<THREE.Group | null>
-  shadowTex: THREE.Texture
+  // When set (integrated GPUs, no real ContactShadows), a soft AO blob grounds the
+  // pair on the floor. It sits on the outer group so it follows the walk X but does
+  // NOT bob with the shoe — the shadow stays planted on the floor.
+  shadowTex: THREE.Texture | null
 }) {
   const face = faceSign > 0 ? -Math.PI / 2 : Math.PI / 2
   return (
@@ -73,11 +121,12 @@ function Pair({
           />
         </Suspense>
       </group>
-      {/* tight contact shadow at the floor line — planted grounding */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0.02]}>
-        <planeGeometry args={[1.5, 0.62]} />
-        <meshBasicMaterial map={shadowTex} transparent depthWrite={false} />
-      </mesh>
+      {shadowTex && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0.02]}>
+          <planeGeometry args={[1.35, 0.66]} />
+          <meshBasicMaterial map={shadowTex} transparent depthWrite={false} opacity={0.85} />
+        </mesh>
+      )}
     </group>
   )
 }
@@ -98,6 +147,8 @@ function Scene({
   const rOuter = useRef<THREE.Group>(null)
   const rBob = useRef<THREE.Group>(null)
   const spotRef = useRef<THREE.SpotLight>(null)
+  const poolTex = usePoolTexture()
+  const backdropTex = useBackdropTexture()
   const shadowTex = useShadowTexture()
   const { camera, invalidate } = useThree()
 
@@ -111,97 +162,140 @@ function Scene({
     }
   }, [invalidate, invalidateRef])
 
-  // Whole scene is a PURE FUNCTION of scroll (walk, bob, turntable, AND the end
-  // camera dive) → demand-mode holds the last frame at zero GPU cost when idle.
+  // The whole scene is a PURE FUNCTION of scroll (walk, lean, present yaw, key
+  // swell, AND the end camera dive) → demand-mode holds the last frame at zero
+  // GPU cost when idle. No clock terms (they'd never tick on a held frame).
   useFrame(() => {
     const p = scrollProgress.current
 
-    // END "DIVE": as the scene resolves (p>0.86) the camera pushes IN + slightly up
-    // — under the gold flood (CSS) it reads as diving into the vault, into the shop.
+    // ── CAMERA ────────────────────────────────────────────────────────────────
+    // Low, heroic angle that looks slightly UP at the pairs; a slow dolly-in through
+    // the approach, a gentle lateral parallax, and a push-in "dive" at the end that
+    // (under the warm CSS flood) reads as moving into the vault, into the shop.
+    const e = smooth(clamp01(p / 0.5)) // 0 entrance → 1 at the meet
     const dive = smooth(clamp01((p - 0.86) / 0.14))
-    camera.position.z = lerp(4.3, 3.05, dive)
-    camera.position.y = lerp(0.9, 1.08, dive)
-    camera.lookAt(0, lerp(0.62, 0.72, dive), 0)
+    camera.position.z = lerp(lerp(4.35, 3.7, e), 2.95, dive)
+    camera.position.y = lerp(0.58, 0.74, dive)
+    camera.position.x = Math.sin(p * Math.PI) * 0.12 // gentle dolly-arc parallax
+    camera.lookAt(0, lerp(0.74, 0.82, dive), 0)
 
-    const enter = clamp01(p / 0.5)
-    const e = smooth(enter)
-    // IMPACT PUNCH — a sharp bell at the meeting (p≈0.5): the pairs recoil APART,
-    // pop in scale, and jolt up, synced with the spotlight swell + the CSS burst.
-    // Pure function of p → demand-safe (settles as you scroll on).
-    const impact = reduced ? 0 : Math.exp(-(((p - 0.5) / 0.045) ** 2))
-    const bob = (reduced ? 0 : Math.abs(Math.sin(enter * Math.PI * 3)) * 0.07) + impact * 0.05
-    const pop = 1 + impact * 0.05
-    // Scroll-driven turntable — eased + FROZEN once the dive begins (p>0.86) so the
-    // spin and the camera push don't fight. ~1.8 scrubbable turns before it locks.
-    const present = clamp01((Math.min(p, 0.86) - 0.5) / 0.5)
-    const spinAngle = reduced ? 0 : smooth(present) * Math.PI * 5
-    const lx = lerp(-5.0, -0.78, e) - impact * 0.09
-    const rx = lerp(5.0, 0.78, e) + impact * 0.09
-    if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = spinAngle }
-    if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -spinAngle }
-    if (lBob.current) { lBob.current.position.y = bob; lBob.current.scale.setScalar(pop) }
-    if (rBob.current) { rBob.current.position.y = bob; rBob.current.scale.setScalar(pop) }
+    // ── THE WALK ──────────────────────────────────────────────────────────────
+    // Two pairs STRIDE in from the wings and PLANT at centre. The gait (bob + rock +
+    // lean) is full early and eases to stillness as they near the meet, so the
+    // motion reads as "walking in, then settling" rather than sliding + spinning.
+    const gait = reduced ? 0 : 1 - smooth(clamp01((p - 0.32) / 0.18)) // 1 → 0 by the meet
+    const steps = clamp01(p / 0.5) * 4 * Math.PI * 2 // ~4 strides over the approach
+    const bobUp = Math.abs(Math.sin(steps)) * 0.03 * gait // rises mid-stride, touches at the plant
+    const settle = reduced ? 0 : Math.exp(-(((p - 0.5) / 0.05) ** 2)) * 0.02 // soft press at the meet
+    const rock = Math.sin(steps) * 0.05 * gait // heel-toe rock
+    const lean = (1 - smooth(clamp01((p - 0.34) / 0.16))) * 0.1 * (reduced ? 0 : 1) // lean into travel, upright at the plant
+    // Present: turn a touch toward camera once met — a composed presentation, NOT
+    // the old 2.5-turn turntable (which read as a config viewer, not a finale).
+    const present = smooth(clamp01((Math.min(p, 0.86) - 0.5) / 0.36))
+    const presentYaw = reduced ? 0 : present * 0.24
 
-    // Spotlight SWELL — a warm light pulse that blooms around the meeting (glow bell
-    // centred at p≈0.48) then settles for the presentation. Free, demand-safe.
+    const lx = lerp(-5.0, -0.8, e)
+    const rx = lerp(5.0, 0.8, e)
+    const y = bobUp - settle
+    if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = presentYaw }
+    if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -presentYaw }
+    if (lBob.current) { lBob.current.position.y = y; lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock }
+    if (rBob.current) { rBob.current.position.y = y; rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock }
+
+    // Warm KEY swell — a light bloom that grows toward the meeting then settles for
+    // the presentation. Free, demand-safe (pure function of p).
     if (spotRef.current) {
-      const glow = Math.exp(-(((p - 0.48) / 0.16) ** 2))
-      spotRef.current.intensity = 36 + glow * 20
+      const glow = Math.exp(-(((p - 0.5) / 0.17) ** 2))
+      spotRef.current.intensity = 26 + glow * 16
     }
   })
 
   return (
     <>
       <color attach="background" args={['#0A0807']} />
-      <fog attach="fog" args={['#0A0705', 4.5, 12]} />
+      <fog attach="fog" args={['#0A0705', 5, 13]} />
 
-      {/* Baked IBL — the scene's RICHNESS, FREE per-frame (frames=1 bakes once).
-          Warm/brass-dominant: gold key overhead + strong warm FRONT panel (lights
-          the shoes' faces so we need ~no real-time lights) + brass ring + side
-          brass + a warm back glow. Zero blue. */}
+      {/* Baked IBL — the scene's RICHNESS, free per-frame (frames=1 bakes once).
+          Warm/brass-dominant key + warm front panel (lights the faces) + a stronger
+          COOL back-rim former that separates the dark silhouettes from the dark
+          backdrop (premium dimension). */}
       <Environment resolution={256} frames={1}>
-        <Lightformer intensity={4.4} color="#FFC178" position={[0, 5, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[8, 8, 1]} />
-        <Lightformer intensity={2.8} color="#FFE7C6" position={[0, 1.8, 5]} scale={[8, 5, 1]} />
+        <Lightformer intensity={4.2} color="#FFC178" position={[0, 5, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[8, 8, 1]} />
+        <Lightformer intensity={2.6} color="#FFE7C6" position={[0, 1.8, 5]} scale={[8, 5, 1]} />
         <Lightformer intensity={2.4} color="#D7AE72" form="ring" position={[0, 3, 1.5]} scale={4} />
         <Lightformer intensity={1.2} color="#A38765" position={[-4, 2, 1]} rotation={[0, Math.PI / 2, 0]} scale={[5, 5, 1]} />
         <Lightformer intensity={1.2} color="#A38765" position={[4, 2, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 5, 1]} />
         <Lightformer intensity={1.0} color="#E8DAC2" position={[0, 2.6, -5]} scale={[9, 4, 1]} />
-        {/* A whisper of COOL rim — baked back/top edge light that separates the dark
-            silhouettes from the dark backdrop (premium dimension). It's an edge rim,
-            NOT a floor cast — frames=1 → zero per-frame cost. */}
-        <Lightformer intensity={0.7} color="#B6C8E8" position={[0, 3, -4]} scale={[6, 3, 1]} />
+        {/* Cool back/top edge rim — separates the dark A.E.1 from the void. */}
+        <Lightformer intensity={1.0} color="#AFC4F0" position={[0, 3.4, -4.5]} scale={[7, 3, 1]} />
       </Environment>
 
-      {/* ONE real-time light (iGPU fill-rate is the binding cost). IBL does the fill;
-          this warm overhead spot adds the directional "spotlight pool" + floor
-          falloff. ambient lifts shadows just enough to keep faces readable. */}
-      <ambientLight intensity={0.30} color="#FFE2C2" />
-      <spotLight ref={spotRef} position={[0, 5.6, 1.2]} angle={0.64} penumbra={1} intensity={36} distance={16} decay={2} color="#FFE3C2" />
+      {/* Real-time lights: a warm KEY (swells at the meet), a COOL rim from behind/
+          above (silhouette separation — the iGPU can't fake this from IBL alone),
+          and a soft warm front fill for the camera-facing soles. ambient lifts the
+          shadows just enough to keep the dark pair readable. */}
+      <ambientLight intensity={0.3} color="#FFE2C2" />
+      <spotLight ref={spotRef} position={[0, 5.4, 1.4]} angle={0.62} penumbra={1} intensity={26} distance={16} decay={2} color="#FFE3C2" />
+      <spotLight position={[0, 4.2, -4]} angle={0.95} penumbra={1} intensity={11} distance={14} decay={2} color="#BFD2F2" />
+      <pointLight position={[0, 1.0, 3.2]} intensity={5} color="#FFE6C2" distance={7} decay={2} />
 
-      {/* Glossy marble floor with a REAL (cheap) reflection — grounds the pairs in
-          their own warm reflection + fills the lower frame with richness. Kept
-          subtle + warm (mirror 0.5, rough 0.55, dark warm base) — NOT the sharp
-          blue mirror from before. resolution 128 + no blur = one cheap FBO pass,
-          and demand-mode means it only renders while scrolling. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} material={reflective ? undefined : staticFloorMat}>
-        <circleGeometry args={[7, 48]} />
+      {/* Backdrop — gives the void depth (a sense of a back wall rising out of the
+          floor) so the pairs meet somewhere, not in a flat black field. */}
+      <mesh position={[0, 2.4, -7]}>
+        <planeGeometry args={[30, 9]} />
+        <meshBasicMaterial map={backdropTex} toneMapped={false} depthWrite={false} />
+      </mesh>
+
+      {/* Glossy marble floor — live reflection on discrete GPUs, cheap static glossy
+          stone on integrated (the pool + contact shadows carry the grounding there). */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} material={reflective ? undefined : staticFloorMat} receiveShadow>
+        <circleGeometry args={[7, 64]} />
         {reflective && (
           <MeshReflectorMaterial
             resolution={128}
             blur={[0, 0]}
             mixBlur={0}
             depthScale={0}
-            mixStrength={2.2}
-            mirror={0.78}
-            color="#100B08"
+            mixStrength={2.0}
+            mirror={0.72}
+            color="#120D09"
             metalness={0.7}
-            roughness={0.32}
+            roughness={0.34}
           />
         )}
       </mesh>
 
-      <Pair url={ASSETS.cloudmonster} faceSign={1} outerRef={lOuter} bobRef={lBob} shadowTex={shadowTex} />
-      <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} shadowTex={shadowTex} />
+      {/* Warm pool of light on the floor — the pairs stand IN it (kills the "floating
+          in a void" read). Additive so it only lifts the stone, never muddies it. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0.1]}>
+        <planeGeometry args={[7, 4.6]} />
+        <meshBasicMaterial map={poolTex} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} opacity={0.9} />
+      </mesh>
+
+      {/* Grounding, tier-aware: real shoe-shaped ContactShadows on discrete GPUs; on
+          integrated GPUs the per-pair AO blob (in <Pair>) + the warm pool carry it,
+          so the demand-render budget isn't spent on a shadow-map RT each scroll frame. */}
+      {reflective && (
+        <ContactShadows position={[0, 0.014, 0]} scale={8} resolution={512} blur={2.6} far={2.0} opacity={0.8} color="#000000" />
+      )}
+
+      <Pair url={ASSETS.cloudmonster} faceSign={1} outerRef={lOuter} bobRef={lBob} shadowTex={reflective ? null : shadowTex} />
+      <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} shadowTex={reflective ? null : shadowTex} />
+
+      {/* AA + filmic grade to match the vault (the finale is demand-rendered, so this
+          only runs on scroll → affordable). SMAA stops the reflection/silhouette
+          edges crawling; ACES tonemap matches the vault's graded look on every GPU.
+          Bloom only on discrete — a full-screen mipmapped bloom is the heaviest pass
+          on an integrated GPU, and the warm scene reads fine through ACES without it. */}
+      <EffectComposer multisampling={0}>
+        {([
+          reflective ? (
+            <Bloom key="bloom" mipmapBlur intensity={0.5} luminanceThreshold={0.8} luminanceSmoothing={0.3} />
+          ) : null,
+          <ToneMapping key="tonemap" mode={ToneMappingMode.ACES_FILMIC} />,
+          <SMAA key="smaa" />,
+        ].filter(Boolean) as React.ReactElement[])}
+      </EffectComposer>
     </>
   )
 }
@@ -210,11 +304,11 @@ function Scene({
 // PERF (iGPU-first — 2nd WebGL canvas over the vault's):
 //   • frameloop="demand" + invalidate-on-scroll → renders ONLY while scrolling;
 //     a held frame costs ZERO GPU (the scene is a pure function of scroll).
-//   • dpr pinned to 1.0 → no 1.44× fill-rate blow-up on integrated GPUs.
-//   • ONE real-time light + baked IBL (free). The reflection adds one cheap 128px
-//     FBO pass, demand-gated. No postprocessing, no real shadows.
-//   • gold glow / vignette / shaft / dust / grain + the meeting burst + the end
-//     gold-flood transition are all cheap CSS overlays in SkyBridge.
+//   • dpr pinned to 1.0 → no fill-rate blow-up on integrated GPUs.
+//   • Few real-time lights + baked IBL (free). Reflection is one cheap 128px FBO
+//     pass on discrete only. Bloom discrete-only; SMAA + ACES on every GPU.
+//   • The gold meet-accent, vignette, beam, dust + flood transition are cheap CSS
+//     overlays in SkyBridge.
 export default function SkyScene({
   scrollProgress,
   active,
@@ -226,16 +320,15 @@ export default function SkyScene({
   reduced: boolean
   invalidateRef: React.MutableRefObject<(() => void) | null>
 }) {
-  // Assume integrated (no live reflection) until a discrete GPU is confirmed in
-  // onCreated — same conservative default as the vault. Integrated GPUs (Iris Xe)
-  // get a cheap static glossy floor; discrete GPUs get the live reflection.
+  // Assume integrated (no live reflection / no bloom) until a discrete GPU is
+  // confirmed in onCreated — same conservative default as the vault.
   const [reflective, setReflective] = useState(false)
   return (
     <Canvas
       flat
       frameloop={active ? 'demand' : 'never'}
       dpr={1}
-      camera={{ position: [0, 0.9, 4.3], fov: 42, near: 0.1, far: 40 }}
+      camera={{ position: [0, 0.58, 4.35], fov: 40, near: 0.1, far: 40 }}
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       shadows={false}
       style={{ background: '#0A0908' }}

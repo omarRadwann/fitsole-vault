@@ -1365,7 +1365,7 @@ export default function VaultScene({ scrollProgress, active, tier, reduced = fal
           cost. resolution 512 = cleaner reflections; the back-corridor formers
           keep the deep end (brands / membership) lit now that the real corridor
           fill lights are gone. NEVER raise frames — that re-bakes every frame. */}
-      <Environment resolution={tier === 'high' ? 1536 : tier === 'standard' ? 512 : 256} frames={1}>
+      <Environment resolution={integrated ? 256 : tier === 'high' ? 1024 : 512} frames={1}>
         <Lightformer intensity={2.2} color="#FFB366" position={[0, 5, -4]} scale={[12, 1.5, 1]} />
         <Lightformer intensity={1.4} color="#FFF4E0" position={[0, 5, -9]} scale={[8, 1, 1]} />
         <Lightformer intensity={1} color="#6E8AB8" position={[0, 3, 13]} scale={[10, 4, 1]} />
@@ -1391,15 +1391,17 @@ export default function VaultScene({ scrollProgress, active, tier, reduced = fal
       <directionalLight position={[3, 6, 14]} intensity={0.6} color="#8FA6C8" />
       {/* Warm amber glow leaking out through the glass door / entrance */}
       <pointLight position={[0, 2.3, 8]} intensity={9} color="#FFB366" distance={10} decay={2} />
-      {/* Warm mid/back corridor accent — reaches the deep corridor. */}
-      <pointLight position={[0, 2.2, -8.2]} intensity={3.4} color="#C9A36A" distance={16} decay={2} />
+      {/* (Removed the warm mid/back-corridor point light — the baked Environment's
+          back-corridor Lightformers + the counter focal already light this depth.
+          One fewer per-fragment light across every material on integrated GPUs.) */}
       {/* Dedicated counter + verification-card focal glow (trimmed so the card
           no longer clips to white). */}
       <pointLight position={[0, 1.85, -7.5]} intensity={7} color="#FFD9A6" distance={6} decay={2} />
-      {/* Shelf product fills — lift the sneakers on the side shelves so they're
-          clearly visible (IBL alone left them muddy). Warm, soft, short range. */}
-      <pointLight position={[-2.7, 1.7, -6]} intensity={6.5} color="#FFE0B0" distance={12} decay={2} />
-      <pointLight position={[2.7, 1.7, -6]} intensity={6.5} color="#FFE0B0" distance={12} decay={2} />
+      {/* Shelf product fill — ONE centred warm light (was two side lights). The wall
+          shelves face inward toward x=0, so a single centre fill lifts BOTH walls'
+          sneakers; halving the count cuts per-fragment cost on integrated GPUs (each
+          light × each material). Range + intensity bumped to reach both walls. */}
+      <pointLight position={[0, 1.95, -6]} intensity={9} color="#FFE0B0" distance={20} decay={2} />
 
       {/* Floor — a SINGLE glossy PBR floor on both tiers (floorMat: metalness
           0.9 / roughness 0.22). It mirrors the baked Environment (warm

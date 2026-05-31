@@ -27,7 +27,8 @@ class AudioEngine {
   private level = 0 // smoothed reactive energy
   private bedStarted = false
   private bedActive = false
-  private musicSource: AudioBufferSourceNode | null = null
+  private musicEl: HTMLAudioElement | null = null
+  private musicNode: MediaElementAudioSourceNode | null = null
   private musicStarted = false
   muted = false
 
@@ -151,26 +152,29 @@ class AudioEngine {
    *  the bed stays silent and the velocity wind still plays. Routed through bedGain
    *  so it ducks under cues + obeys mute. Skipped when the bed isn't active (mobile
    *  static fallback) so phones don't fetch ~5MB for an experience they never hear. */
-  private async startMusicBed(ctx: AudioContext) {
+  private startMusicBed(ctx: AudioContext) {
     if (this.musicStarted || !this.bedGain || !this.bedActive) return
     this.musicStarted = true
     try {
-      const res = await fetch(withBase('/audio/vault-bed.mp3'))
-      if (!res.ok) { this.musicStarted = false; return }
-      const buf = await ctx.decodeAudioData(await res.arrayBuffer())
-      const src = ctx.createBufferSource()
-      src.buffer = buf
-      src.loop = true
-      // Loop a hair inside the track so the decoded-MP3 encoder delay/padding at the
-      // raw buffer ends doesn't click on every repeat.
-      src.loopStart = 0.06
-      src.loopEnd = Math.max(0.2, buf.duration - 0.08)
+      // STREAM the bed via an HTMLAudioElement (NOT decodeAudioData). decodeAudioData
+      // expands the ~5MB mp3 to ~60–100MB of PCM held for the WHOLE session; a media-
+      // element source streams it for ~no resident memory. The element is never added
+      // to the DOM — it routes through Web Audio (→ bedGain → master → analyser) so it
+      // still ducks under cues, obeys mute, and feeds the audio-reactive vault. Same-
+      // origin (withBase) → no crossOrigin/CORS needed. (Re-landed from the reverted
+      // 71fd0e4 — the safe RAM win, without that commit's ENTER-gate UX change.)
+      const el = new Audio()
+      el.src = withBase('/audio/vault-bed.mp3')
+      el.loop = true
+      el.preload = 'auto'
+      const node = ctx.createMediaElementSource(el)
       const g = ctx.createGain()
-      g.gain.value = 0.85 // sits as present background music, not foreground
-      src.connect(g)
+      g.gain.value = 0.85 // present background music, not foreground
+      node.connect(g)
       g.connect(this.bedGain)
-      src.start()
-      this.musicSource = src
+      void el.play().catch(() => { this.musicStarted = false }) // retry on a later gesture
+      this.musicEl = el
+      this.musicNode = node
     } catch {
       this.musicStarted = false // allow a retry on a later unlock / activation
     }

@@ -9,7 +9,6 @@ import { useBedSection } from '@/lib/audio'
 
 // Real 3D finale (WebGL/R3F) — client-only, like VaultCanvas.
 const SkyScene = dynamic(() => import('./SkyScene'), { ssr: false })
-const SPARKS = [0, 26, 52, 78, 104, 130, 156, 182, 208, 234, 260, 286, 312, 338]
 // Floating dust motes drifting in the light beam — deterministic (no Math.random →
 // SSR-safe, no hydration mismatch): x%, y%, size px, drift duration s, delay s.
 const MOTES = [
@@ -30,17 +29,18 @@ const MOTES = [
 ]
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
 
-// "The Meeting" — the finale, now in real 3D. Two actual Tripo models of the ON
-// Cloudmonster + Adidas A.E. 1 stride in across a glossy marble floor (driven by
-// scroll), MEET center-stage with a gold burst, then slowly turntable while the
-// line lands and the frame resolves to black into the shop. The 3D scene (SkyScene)
-// carries the realistic models + IBL + marble reflection; CSS overlays add the gold
-// spotlight glow, vignette, and impact burst (cheap — no GPU postprocessing).
+// "The Meeting" — the finale, in real 3D. Two actual Tripo models of the ON
+// Cloudmonster + Adidas A.E. 1 STRIDE in across a glossy marble floor (driven by
+// scroll), MEET center-stage in a warm pool of light, then settle and present while
+// the line lands and the frame resolves into the shop. The 3D scene (SkyScene)
+// carries the realistic models + IBL + reflection + real contact shadows + the
+// stride; CSS overlays add the warm spotlight glow, vignette, dust, a single soft
+// gold meet-ring, and the gentle warm flood transition (cheap — no GPU post burst).
 //
 // PERF: the canvas frameloop is gated to in-view, so it only renders on-screen —
 // never alongside the vault canvas (different scroll depths) or the shop. Lean
-// scene (no Bloom/real shadows, low DPR, ~270KB meshopt models). Scroll read from a
-// cached offset. Mobile (no WebGL) → the premium themed render as a static shot.
+// scene (demand-render, low DPR, ~270KB meshopt models). Scroll read from a cached
+// offset. Mobile (no WebGL) → the premium themed render as a static shot.
 export default function SkyBridge() {
   const sectionRef = useRef<HTMLElement>(null)
   const scrollProgress = useRef(0) // 0..1, consumed by SkyScene's useFrame
@@ -49,14 +49,12 @@ export default function SkyBridge() {
   const floodRef = useRef<HTMLDivElement>(null)
   const resolveRef = useRef<HTMLDivElement>(null)
   const chargeRef = useRef<HTMLDivElement>(null)
-  const auraRef = useRef<HTMLDivElement>(null)
-  const flareRef = useRef<HTMLDivElement>(null)
   // SkyScene runs frameloop="demand" — we call this to request a render ONLY when
   // scroll actually moves (the scene is a pure function of scroll). The big lag fix.
   const invalidateRef = useRef<(() => void) | null>(null)
   const lastRenderedP = useRef(-1)
   // Damped scroll (mirrors VaultExperience) — smooths coarse mouse-wheel steps so
-  // the stride / spin / bob glide instead of snapping between discrete poses.
+  // the stride / settle glide instead of snapping between discrete poses.
   const damped = useRef(-1)
   const lastT = useRef(0)
 
@@ -106,6 +104,8 @@ export default function SkyBridge() {
     const io = new IntersectionObserver(
       ([e]) => {
         setInView(e.isIntersecting)
+        // Fade the store header to full-bleed the cinematic frame (Header listens).
+        window.dispatchEvent(new CustomEvent('fitsole:finale', { detail: e.isIntersecting }))
         if (e.isIntersecting && !reduced && !neyFired.current) {
           neyFired.current = true
           audioEngine.playCue('ney')
@@ -114,11 +114,14 @@ export default function SkyBridge() {
       { threshold: 0 }
     )
     io.observe(el)
-    return () => io.disconnect()
+    return () => {
+      io.disconnect()
+      window.dispatchEvent(new CustomEvent('fitsole:finale', { detail: false }))
+    }
   }, [reduced])
 
   // Scroll driver — writes scrollProgress (the 3D scene reads it) + the DOM overlay
-  // (burst at the meeting, copy fade, resolve-to-black). Only runs while in view.
+  // (soft ring at the meeting, copy fade, warm flood, resolve-to-black). In view only.
   useEffect(() => {
     if (!inView) return
     lastRenderedP.current = -1 // force a render on (re)entry
@@ -144,22 +147,26 @@ export default function SkyBridge() {
       const p = damped.current
       scrollProgress.current = p
       // Demand-render the 3D scene only when scroll moved (else it holds the last
-      // frame at zero GPU cost). This + dpr=1 + one light is the lag fix.
+      // frame at zero GPU cost). This + dpr=1 + few lights is the lag fix.
       if (Math.abs(p - lastRenderedP.current) > 0.0004) {
         lastRenderedP.current = p
         invalidateRef.current?.()
       }
+      // A single soft gold ring draws outward once as the pairs meet, plus a quiet
+      // chime. The old fireworks (rays/sparks/flash/floorwave/auras/lens-flare) were
+      // cut for a restrained, expensive read. Re-arms on scroll-back.
       if (!reduced && burstRef.current) {
         if (p >= 0.48 && !armed.current) {
           armed.current = true
           burstRef.current.classList.add('burst')
+          audioEngine.playCue('chime')
         } else if (p < 0.4 && armed.current) {
           armed.current = false
           burstRef.current.classList.remove('burst')
         }
       }
       // Charge — the centre gathers warm energy as the pairs close in (p .3→.48),
-      // then snaps off the instant the burst fires.
+      // then eases off the instant the ring fires.
       if (chargeRef.current) {
         chargeRef.current.style.opacity = (clamp01((p - 0.3) / 0.18) * (p < 0.49 ? 1 : 0)).toFixed(3)
       }
@@ -168,25 +175,12 @@ export default function SkyBridge() {
         const fout = p > 0.9 ? clamp01(1 - (p - 0.9) / 0.1) : 1
         copyRef.current.style.opacity = (fin * fout).toFixed(3)
       }
-      // End transition: a warm gold flood blooms (p .82→.90) as the camera dives in,
-      // then hands off to the black resolve (p .92→1) for a seamless seam into the shop.
+      // End transition: a gentle warm flood (p .82→.90) as the camera dives in, then
+      // hands to the black resolve (p .92→1) for a seamless seam into the shop.
       if (floodRef.current) {
         const up = clamp01((p - 0.82) / 0.08)
         const down = p > 0.93 ? clamp01(1 - (p - 0.93) / 0.05) : 1
-        floodRef.current.style.opacity = (up * down).toFixed(3)
-      }
-      // Charged auras behind the spinning pairs (presentation window .5→.86), faded
-      // out before the dive so they don't fight the flood.
-      if (auraRef.current) {
-        const ain = clamp01((p - 0.5) / 0.06)
-        const aout = p > 0.84 ? clamp01(1 - (p - 0.84) / 0.06) : 1
-        auraRef.current.style.opacity = (ain * aout).toFixed(3)
-      }
-      // Lens-flare starburst during the dive — rides with the gold flood.
-      if (flareRef.current) {
-        const fu = clamp01((p - 0.84) / 0.07)
-        const fd = p > 0.94 ? clamp01(1 - (p - 0.94) / 0.05) : 1
-        flareRef.current.style.opacity = (fu * fd).toFixed(3)
+        floodRef.current.style.opacity = (up * down * 0.85).toFixed(3)
       }
       if (resolveRef.current) resolveRef.current.style.opacity = clamp01((p - 0.92) / 0.08).toFixed(3)
       rafId.current = requestAnimationFrame(frame)
@@ -199,7 +193,7 @@ export default function SkyBridge() {
   }, [inView, reduced])
 
   return (
-    <section ref={sectionRef} aria-label="FitSole — two drops, one vault" className="relative h-[200vh] w-full">
+    <section ref={sectionRef} aria-label="FitSole — two drops, one vault" className="relative h-[400vh] w-full">
       <div className="sticky top-0 h-screen w-full overflow-hidden bg-vault-black">
         {/* The real 3D scene (or a premium static render on the no-WebGL mobile path) */}
         {mobile ? (
@@ -230,14 +224,6 @@ export default function SkyBridge() {
               'radial-gradient(ellipse 84% 86% at 50% 46%, transparent 42%, rgba(0,0,0,0.82) 100%)',
           }}
         />
-
-        {/* Charged auras behind the spinning pairs — additive (screen) gold halos
-            that make the pairs feel powered-up during the presentation. Opacity
-            driven by the rAF; the slow scale-breathe is a cheap CSS keyframe. */}
-        <div ref={auraRef} aria-hidden className="absolute inset-0 pointer-events-none z-[3]" style={{ opacity: 0 }}>
-          <span className="sky-aura absolute rounded-full" style={{ left: '34%', top: '60%', width: '320px', height: '320px', mixBlendMode: 'screen', background: 'radial-gradient(circle, rgba(255,206,140,0.4), rgba(255,176,92,0.12) 44%, transparent 70%)' }} />
-          <span className="sky-aura absolute rounded-full" style={{ left: '66%', top: '60%', width: '320px', height: '320px', mixBlendMode: 'screen', background: 'radial-gradient(circle, rgba(255,206,140,0.4), rgba(255,176,92,0.12) 44%, transparent 70%)', animationDelay: '1.7s' }} />
-        </div>
 
         {/* Floating gold dust in the light beam — depth + atmosphere. Pure CSS
             transform/opacity drift (compositor-only, no blur, no main-thread cost);
@@ -274,27 +260,18 @@ export default function SkyBridge() {
           }}
         />
 
-        {/* Charge — warm energy gathers at the meeting point before impact. */}
+        {/* Charge — warm energy gathers at the meeting point before the pairs meet. */}
         <div
           ref={chargeRef}
           aria-hidden
           className="absolute inset-0 pointer-events-none z-[5]"
-          style={{ opacity: 0, backgroundImage: 'radial-gradient(ellipse 28% 26% at 50% 60%, rgba(255,216,150,0.55), rgba(255,184,104,0.14) 46%, transparent 72%)' }}
+          style={{ opacity: 0, backgroundImage: 'radial-gradient(ellipse 28% 26% at 50% 60%, rgba(255,216,150,0.5), rgba(255,184,104,0.12) 46%, transparent 72%)' }}
         />
 
-        {/* Gold impact burst at the meeting point — a cinematic event: a floor
-            shockwave + starburst rays + three expanding rings + a bright flash +
-            embers flung outward. All gated to the one-shot .burst class. */}
+        {/* A single soft gold ring draws outward once as the pairs meet — the whole
+            "impact" now. Gated to the one-shot .burst class (re-armed on scroll-back). */}
         <div ref={burstRef} aria-hidden className="meet-burst absolute left-1/2 top-[60%] pointer-events-none z-[5]" style={{ width: 0, height: 0 }}>
-          <div className="floorwave absolute" style={{ width: '440px', height: '96px', left: '-220px', top: '-48px', background: 'radial-gradient(ellipse at center, rgba(255,206,138,0.6), rgba(255,176,90,0.12) 55%, transparent 76%)', transformOrigin: 'center' }} />
-          <div className="ray-burst absolute" style={{ width: '600px', height: '600px', left: '-300px', top: '-300px', background: 'repeating-conic-gradient(from 0deg, rgba(255,222,154,0) 0deg 7deg, rgba(255,222,154,0.5) 7deg 8.4deg, rgba(255,222,154,0) 8.4deg 15deg)', WebkitMaskImage: 'radial-gradient(circle, transparent 9%, #000 24%, #000 44%, transparent 64%)', maskImage: 'radial-gradient(circle, transparent 9%, #000 24%, #000 44%, transparent 64%)' }} />
-          <div className="ring3 absolute rounded-full border border-vault-gold/25" style={{ width: '150px', height: '150px', left: '-75px', top: '-75px' }} />
-          <div className="ring absolute rounded-full border-2 border-vault-gold/70" style={{ width: '180px', height: '180px', left: '-90px', top: '-90px' }} />
-          <div className="ring2 absolute rounded-full border border-vault-gold/40" style={{ width: '110px', height: '110px', left: '-55px', top: '-55px' }} />
-          <div className="flash absolute rounded-full" style={{ width: '560px', height: '560px', left: '-280px', top: '-280px', background: 'radial-gradient(circle, rgba(255,240,196,0.9), rgba(255,196,116,0.26) 34%, transparent 62%)' }} />
-          {SPARKS.map((a, i) => (
-            <span key={i} className="spark absolute rounded-full" style={{ width: '6px', height: '6px', left: '-3px', top: '-3px', background: 'rgba(255,226,154,0.95)', boxShadow: '0 0 9px 1px rgba(255,210,130,0.6)', ['--a']: `${a}deg` } as React.CSSProperties} />
-          ))}
+          <div className="ring absolute rounded-full border border-vault-gold/45" style={{ width: '200px', height: '200px', left: '-100px', top: '-100px' }} />
         </div>
 
         {/* Copy + CTA (lands after the meeting, upper area) */}
@@ -317,7 +294,7 @@ export default function SkyBridge() {
           </div>
         </div>
 
-        {/* End transition — warm gold flood + flare blooms as the camera dives in… */}
+        {/* End transition — a gentle warm flood blooms as the camera dives in… */}
         <div
           ref={floodRef}
           aria-hidden
@@ -325,21 +302,7 @@ export default function SkyBridge() {
           style={{
             opacity: 0,
             backgroundImage:
-              'radial-gradient(ellipse 64% 58% at 50% 56%, rgba(255,216,150,0.97), rgba(255,176,86,0.55) 34%, rgba(120,70,20,0) 72%)',
-          }}
-        />
-        {/* Lens-flare starburst as we dive through the light — anamorphic streaks +
-            a bright core, riding with the flood. */}
-        <div
-          ref={flareRef}
-          aria-hidden
-          className="absolute inset-0 z-[19] pointer-events-none"
-          style={{
-            opacity: 0,
-            backgroundImage:
-              'radial-gradient(70% 2px at 50% 56%, rgba(255,246,222,0.9), transparent 72%),' +
-              'radial-gradient(2px 54% at 50% 56%, rgba(255,246,222,0.72), transparent 72%),' +
-              'radial-gradient(circle 64px at 50% 56%, rgba(255,248,230,0.96), transparent 76%)',
+              'radial-gradient(ellipse 66% 60% at 50% 56%, rgba(255,214,154,0.6), rgba(255,180,96,0.32) 38%, rgba(120,70,20,0) 74%)',
           }}
         />
         {/* …then resolves to black for a seamless seam into FeaturedUnboxing. */}

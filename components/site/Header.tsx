@@ -21,6 +21,8 @@ export default function Header() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  // Fade the whole header out to full-bleed the cinematic finale ("The Meeting").
+  const [finaleActive, setFinaleActive] = useState(false)
   const { count, setOpen } = useCart()
   const { muted, toggle: toggleAudio } = useAudio()
 
@@ -28,6 +30,15 @@ export default function Header() {
     const onScroll = () => setScrolled(window.scrollY > 40)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  // SkyBridge dispatches `fitsole:finale` {detail:boolean} as the finale ("The
+  // Meeting") enters/leaves view; fade the header out over it so the cinematic
+  // frame is full-bleed, then fade it back in for the shop.
+  useEffect(() => {
+    const onFinale = (e: Event) => setFinaleActive(!!(e as CustomEvent).detail)
+    window.addEventListener('fitsole:finale', onFinale as EventListener)
+    return () => window.removeEventListener('fitsole:finale', onFinale as EventListener)
   }, [])
 
   // Escape closes the mobile menu.
@@ -48,7 +59,8 @@ export default function Header() {
           // the whole page every scroll frame — a major scroll-jank source on
           // integrated GPUs. At 95% opacity the frosting was invisible anyway.
           ? 'bg-vault-black/95 border-b border-vault-gold/10'
-          : 'bg-transparent'
+          : 'bg-transparent',
+        finaleActive && 'opacity-0 pointer-events-none'
       )}
     >
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
