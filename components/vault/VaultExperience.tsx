@@ -144,10 +144,6 @@ export default function VaultExperience() {
   const [vaultVisible, setVaultVisible] = useState(true)
   const vaultVisibleRef = useRef(true)
   const motionProgRef = useRef(0)
-  // The WebGL canvas mounts immediately (so assets load + the preloader can show
-  // progress), but does NOT render until the user clicks ENTER — otherwise the
-  // heavy scene burns GPU behind the opaque preloader during the load spike.
-  const [entered, setEntered] = useState(false)
 
   // Serve the lightweight static hero ONLY to true phones (small screen + touch).
   // Coarse-pointer gating keeps iPads AND laptops on the rich 3D walk.
@@ -379,14 +375,14 @@ export default function VaultExperience() {
         <VaultStatic reducedMotion={reduced} />
       ) : (
       <>
-      <VaultPreloader onEnter={() => setEntered(true)} />
+      <VaultPreloader />
       <div ref={containerRef} style={{ height: '700vh' }} className="relative">
         {/* Sticky viewport */}
         <div className="sticky top-0 h-screen w-full overflow-hidden">
           {/* 3D canvas */}
           <div className="absolute inset-0">
             <WebGLBoundary fallback={<VaultFailBackdrop />}>
-              <VaultCanvas scrollProgress={scrollProgress} active={entered && vaultVisible} reduced={reduced} />
+              <VaultCanvas scrollProgress={scrollProgress} active={vaultVisible} reduced={reduced} />
             </WebGLBoundary>
           </div>
 

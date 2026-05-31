@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useProgress } from '@react-three/drei'
-import { audioEngine } from '@/lib/audioEngine'
 
 // Cinematic intro: a branded loading state that PARTS LIKE VAULT DOORS to reveal
 // the 3D vault once drei's global loading manager (useProgress) reports done.
@@ -12,11 +11,10 @@ import { audioEngine } from '@/lib/audioEngine'
 // visits) instead of a single static "Authenticating".
 const LOADING_PHRASES = ['Authenticating', 'Verifying the pair', 'Scanning the vault', 'Unlocking the heat']
 
-export default function VaultPreloader({ onEnter }: { onEnter?: () => void }) {
+export default function VaultPreloader() {
   const { active, progress, total } = useProgress()
   const [hidden, setHidden] = useState(false)
   const [revealing, setRevealing] = useState(false)
-  const [ready, setReady] = useState(false) // loaded → show the ENTER gate
   const [phraseIdx, setPhraseIdx] = useState(0)
   const startedRef = useRef(false)
   const exitingRef = useRef(false)
@@ -47,14 +45,6 @@ export default function VaultPreloader({ onEnter }: { onEnter?: () => void }) {
     )
   }, [])
 
-  // The deliberate entry click. A click IS a valid user-activation gesture (a
-  // mouse-wheel scroll is NOT, per the browser autoplay policy), so this is what
-  // starts the ambient music — by the time the doors part, sound is unlocked.
-  const enter = useCallback(() => {
-    audioEngine.unlock()
-    beginExit()
-  }, [beginExit])
-
   // Safety net — drain after 6s no matter what. MOUNT-ONLY: drei's `active`
   // toggles on every GLB/texture/video decode, so a 6s timer keyed on [active]
   // gets cleared + reset on each toggle and, on a slow device that loads many
@@ -62,21 +52,19 @@ export default function VaultPreloader({ onEnter }: { onEnter?: () => void }) {
   // Setting it once on mount (and clearing only on unmount) makes the 6s ceiling
   // a hard guarantee. Also clears the nested reveal timers so none fire after unmount.
   useEffect(() => {
-    // Safety net: show the ENTER gate after 6s no matter what (so a slow/hung load
-    // never strands the user behind the curtain — they can always click in).
-    timers.current.push(window.setTimeout(() => setReady(true), 6000))
+    timers.current.push(window.setTimeout(beginExit, 6000))
     const pending = timers.current
     return () => {
       pending.forEach((t) => window.clearTimeout(t))
       pending.length = 0
     }
-  }, [])
+  }, [beginExit])
 
-  // Fast path: loaders registered then all settled (!active) → reveal the ENTER
-  // gate now instead of waiting out the full 6s on a quick/cached load.
+  // Fast path: loaders registered then all settled (!active) → reveal now
+  // instead of waiting out the full 6s on a quick/cached load.
   useEffect(() => {
-    if (startedRef.current && !active) setReady(true)
-  }, [active])
+    if (startedRef.current && !active) beginExit()
+  }, [active, beginExit])
 
   if (hidden) return null
 
@@ -86,7 +74,7 @@ export default function VaultPreloader({ onEnter }: { onEnter?: () => void }) {
     <div
       className="fixed inset-0 z-[100] overflow-hidden"
       style={{ pointerEvents: revealing ? 'none' : 'auto' }}
-      aria-hidden={!ready}
+      aria-hidden="true"
     >
       {/* The two vault doors */}
       <div className={`vault-door vault-door--l${revealing ? ' vault-door--open' : ''}`} />
@@ -102,34 +90,20 @@ export default function VaultPreloader({ onEnter }: { onEnter?: () => void }) {
         <div className="flex flex-col items-center gap-7">
           <p className="text-[10px] tracking-[0.5em] uppercase text-vault-gold/80">FitSole · Cairo</p>
           <h2 className="font-display text-3xl sm:text-5xl font-semibold tracking-display text-vault-cream text-center leading-[0.95]">
-            {ready ? 'The Vault Awaits' : 'Entering the Vault'}
+            Entering the Vault
           </h2>
-          {ready ? (
-            <div className="flex flex-col items-center gap-3">
-              <button
-                onClick={enter}
-                className="pointer-events-auto px-10 py-3.5 text-xs tracking-[0.25em] uppercase font-medium bg-vault-gold text-vault-black hover:bg-vault-cream transition-colors duration-200 rounded-sm shadow-[0_10px_34px_rgba(0,0,0,0.5)]"
-              >
-                Enter the Vault
-              </button>
-              <span className="flex items-center gap-1.5 text-[9px] tracking-[0.3em] uppercase text-vault-muted">
-                Sound on — tap to begin
-              </span>
+          <div className="w-56 sm:w-72 flex flex-col gap-2.5">
+            <div className="h-px w-full bg-vault-cream/10 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-vault-gold/50 to-vault-gold transition-[width] duration-500 ease-out"
+                style={{ width: `${pct}%` }}
+              />
             </div>
-          ) : (
-            <div className="w-56 sm:w-72 flex flex-col gap-2.5">
-              <div className="h-px w-full bg-vault-cream/10 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-vault-gold/50 to-vault-gold transition-[width] duration-500 ease-out"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[9px] tracking-[0.3em] uppercase text-vault-muted">
-                <span className="transition-opacity duration-500">{LOADING_PHRASES[phraseIdx]}</span>
-                <span className="tabular-nums">{pct}%</span>
-              </div>
+            <div className="flex justify-between text-[9px] tracking-[0.3em] uppercase text-vault-muted">
+              <span className="transition-opacity duration-500">{LOADING_PHRASES[phraseIdx]}</span>
+              <span className="tabular-nums">{pct}%</span>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

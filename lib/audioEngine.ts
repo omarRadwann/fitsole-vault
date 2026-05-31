@@ -27,8 +27,7 @@ class AudioEngine {
   private level = 0 // smoothed reactive energy
   private bedStarted = false
   private bedActive = false
-  private musicEl: HTMLAudioElement | null = null // streamed bed (not decoded → low RAM)
-  private musicNode: MediaElementAudioSourceNode | null = null
+  private musicSource: AudioBufferSourceNode | null = null
   private musicStarted = false
   muted = false
 
@@ -156,24 +155,22 @@ class AudioEngine {
     if (this.musicStarted || !this.bedGain || !this.bedActive) return
     this.musicStarted = true
     try {
-      // STREAM the bed via an HTMLAudioElement instead of decodeAudioData. A ~5MB mp3
-      // decoded to PCM is ~60-100MB of RAM held for the ENTIRE session, which crushes
-      // low-memory laptops (a reported freeze cause). MediaElementSource streams from
-      // disk (negligible RAM) and still routes through our gain/duck/analyser graph.
-      // The element is NOT appended to the DOM, so audio plays through exactly ONE
-      // path (Web Audio), not a duplicate default-output path.
-      const el = new Audio(withBase('/audio/vault-bed.mp3'))
-      el.loop = true
-      el.preload = 'auto'
-      el.crossOrigin = 'anonymous'
-      const node = ctx.createMediaElementSource(el)
+      const res = await fetch(withBase('/audio/vault-bed.mp3'))
+      if (!res.ok) { this.musicStarted = false; return }
+      const buf = await ctx.decodeAudioData(await res.arrayBuffer())
+      const src = ctx.createBufferSource()
+      src.buffer = buf
+      src.loop = true
+      // Loop a hair inside the track so the decoded-MP3 encoder delay/padding at the
+      // raw buffer ends doesn't click on every repeat.
+      src.loopStart = 0.06
+      src.loopEnd = Math.max(0.2, buf.duration - 0.08)
       const g = ctx.createGain()
       g.gain.value = 0.85 // sits as present background music, not foreground
-      node.connect(g)
+      src.connect(g)
       g.connect(this.bedGain)
-      await el.play().catch(() => {})
-      this.musicEl = el
-      this.musicNode = node
+      src.start()
+      this.musicSource = src
     } catch {
       this.musicStarted = false // allow a retry on a later unlock / activation
     }
