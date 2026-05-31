@@ -54,19 +54,22 @@ export default function Header() {
     <header
       className={cn(
         'fixed top-0 left-0 right-0 z-50 transition-all duration-500',
-        scrolled
+        // During the finale, force a transparent bar so no chrome bleeds across the
+        // cinematic frame — but DON'T disable the whole header: the brand + nav links
+        // fade out (below), while the cart / mute / search actions stay reachable
+        // through the 400vh finale (a shopper mid-scene must still open their cart).
+        finaleActive || !scrolled
           // Solid (no backdrop-blur): a fixed, always-visible blurred bar re-blurs
           // the whole page every scroll frame — a major scroll-jank source on
           // integrated GPUs. At 95% opacity the frosting was invisible anyway.
-          ? 'bg-vault-black/95 border-b border-vault-gold/10'
-          : 'bg-transparent',
-        finaleActive && 'opacity-0 pointer-events-none'
+          ? 'bg-transparent'
+          : 'bg-vault-black/95 border-b border-vault-gold/10'
       )}
     >
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group">
+          {/* Logo — fades over the finale (chrome), restores for the shop */}
+          <Link href="/" className={cn('flex items-center gap-2 group transition-opacity duration-500', finaleActive && 'opacity-0 pointer-events-none')}>
             <span className="font-display text-xl font-semibold tracking-[0.2em] text-vault-cream group-hover:text-vault-gold transition-colors duration-300">
               FITSOLE
             </span>
@@ -75,8 +78,8 @@ export default function Header() {
             </span>
           </Link>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
+          {/* Desktop Nav — fades over the finale (chrome) */}
+          <nav className={cn('hidden md:flex items-center gap-8 transition-opacity duration-500', finaleActive && 'opacity-0 pointer-events-none')} aria-label="Main navigation">
             {navLinks.map((link) => (
               <Link
                 key={link.label}
@@ -88,8 +91,9 @@ export default function Header() {
             ))}
           </nav>
 
-          {/* Right actions */}
-          <div className="flex items-center gap-4">
+          {/* Right actions — STAY reachable through the finale (cart/mute/search),
+              just dimmed so they don't compete with the cinematic frame. */}
+          <div className={cn('flex items-center gap-4 transition-opacity duration-500', finaleActive && 'opacity-70')}>
             <button
               onClick={toggleAudio}
               aria-label={muted ? 'Unmute ambient sound' : 'Mute ambient sound'}
