@@ -327,3 +327,57 @@ Everything else (lighting grade per beat, shoebox decals, footer, console hygien
 ---
 
 *Generated 2026-05-26. Live‑instrumented on localhost: GPU/tier/DPR/postFX boot readout, network waterfall, console, accessibility tree, a 4‑width computed‑layout responsive sweep (1920/1440/1280/390), and a live Search‑overlay interaction — all via DOM tooling (Intel Iris Xe, hidden‑tab/parked‑renderer limitation noted throughout). Rendered‑pixel and FPS findings are flagged `[UNVERIFIED]` and grounded in source + the prior real‑browser audits. No source files were modified (audit‑only scope).*
+
+---
+
+# 16) 2026-06-01 Update — Finale "The Meeting" rebuild + perf pass (commit `04e46cb`)
+
+*This session DID modify source. It postdates the finale "The Meeting" (`SkyBridge`/`SkyScene`,
+a 2nd R3F canvas), which §1–15 above predate entirely. Method this round: Playwright + SwiftShader
+(the integrated/Iris-Xe code path) against a LOCAL static `next build` served on :4000 — `next dev`
+is barred on this machine (it OOM-froze the OS repeatedly; a single one-shot `build` is safe). CDP
+`Page.captureScreenshot` bypassed the rAF stability timeout. Real-GPU FPS still pending (see §6/§10).*
+
+## What was wrong (the user's #1 complaint — now fixed)
+The finale where **two sneakers walk in and meet** was the least-premium thing on the site:
+**two product cut-outs levitating in a near-black void**, papered over by a CSS **gold explosion**
+(starburst rays, 14 sparks, flash, floor shockwave, 3 rings, charged auras, lens-flare). The "walk"
+was a sideways X-slide + a 2.5-turn turntable + an `abs(sin)` bob. Evidence: `C:\tmp\finale_live_p45.png`.
+
+## What shipped
+**Finale (`SkyScene.tsx`, `SkyBridge.tsx`, `Header.tsx`, `globals.css`) — restrained-luxury rebuild:**
+real grounding (tier-aware ContactShadows on discrete / soft AO blob on integrated) + a warm floor
+**light-pool** so the pairs stand *in a place*; a glossy marble floor + warm/cool IBL + depth
+backdrop + vignette; a believable **stride** (heel-toe rock + ground-contact bob + lean-into-travel →
+**plant** at the meet → composed present yaw); a **low cinematic camera** (dolly + parallax) + a cool
+rim light; a minimal **SMAA + ACES** composer (Bloom discrete-only); the gold fireworks **cut to one
+soft ring + a restrained chime**; **200vh → 400vh** so the walk breathes; the **header fades** over
+the finale for a full-bleed frame. Demand-rendered, so the richer scene is ~free at idle.
+Evidence (after): `C:\tmp\r1_finale_p30/p50/p74.png`.
+
+**Perf (integrated-GPU first):** vault dynamic lights **~10 → ~8** (two side shelf-fills → one
+centred; dropped the redundant mid-corridor point — IBL covers it); **env map** integrated 256 /
+standard 512 / high 1536→1024; **audio bed streamed** via `HTMLAudioElement` instead of
+`decodeAudioData` (**~60–100 MB resident PCM → ~0**; re-landed the safe win from the reverted
+`71fd0e4`, without its ENTER-gate UX change). Vault legibility re-verified at every beat
+(`C:\tmp\r1_vault_p12/p46/p57/p72/p90.png`) + clean shop handoff (`C:\tmp\r1_shop.png`).
+
+## Deferred (with reason — corrects §10's framing)
+- **Vault `frameloop="demand"` idle gating.** §9/§10 and the MOONSHOT doc called "renders the unseen
+  vault while shopping" the #1 perf issue — but that is **already fixed**: `VaultExperience` parks
+  `active={vaultVisible}` (`frameloop:never`) once you scroll past the vault. The only residual is
+  "user pauses *while the vault is on-screen*," and a demand conversion would freeze the
+  turntable/dust/audio-neon and risk a camera-convergence stutter — a behavioural change that can't
+  be FPS-verified without the real GPU. **Deferred as an opt-in follow-up** pending a real-device FPS read.
+
+## Still open from §1–15 (NOT addressed this pass — the user scoped this to perf + finale)
+Hero GLB fidelity (P1), Nike-promised-but-zero-Nike-SKUs (P0 integrity), no mobile 3D signature (P1),
+WebGL-context-loss boundary (P1), real-device FPS measurement (P2). These remain the route to a 9.
+
+## Updated verdict
+The finale was the single worst-scoring scene; it is now a genuine, grounded, cinematic close.
+That + the perf/RAM wins lifts the overall readiness from **~7 → ~8/10**. The remaining gap to SOTD
+is now the §15 items (hero fidelity + mobile reach + the Nike fix), not the finale.
+
+*2026-06-01 — verified on the integrated path via SwiftShader + a local static build; real-GPU
+visual/FPS confirmation on the user's Iris Xe is the open loop.*
