@@ -81,9 +81,9 @@ function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; wood
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]} receiveShadow>
         <planeGeometry args={[22, 24]} />
         {reflective ? (
-          <MeshReflectorMaterial map={woodTex} resolution={128} blur={[160, 70]} mixBlur={1} mixStrength={0.45} depthScale={0.5} color="#ffffff" metalness={0.1} roughness={0.5} />
+          <MeshReflectorMaterial map={woodTex} resolution={128} blur={[160, 70]} mixBlur={1} mixStrength={0.5} depthScale={0.5} color="#6E4E30" metalness={0.1} roughness={0.5} />
         ) : (
-          <meshStandardMaterial map={woodTex} roughness={0.3} metalness={0.0} />
+          <meshStandardMaterial map={woodTex} color="#6E4E30" roughness={0.32} metalness={0.0} />
         )}
       </mesh>
 
@@ -241,18 +241,18 @@ function Scene({
 
   return (
     <>
-      <color attach="background" args={['#140E09']} />
-      <fog attach="fog" args={['#140E09', 11, 30]} />
+      <color attach="background" args={['#0A0806']} />
+      <fog attach="fog" args={['#0A0806', 10, 28]} />
 
       {/* Warm IBL — soft fill for the pairs' PBR + the floor/mirror reflections. A warm
           ceiling key panel + warm wall fills + ONE cool side panel (a 'window') so the
           dark A.E.1 separates from the warm room. Baked once (frames=1), free per-frame. */}
       <Environment resolution={256} frames={1}>
-        <Lightformer intensity={3.0} color="#FFD8A0" position={[0, 5, -1]} rotation={[-Math.PI / 2, 0, 0]} scale={[9, 9, 1]} />
-        <Lightformer intensity={1.8} color="#FFE7C6" position={[0, 2, 4]} scale={[8, 5, 1]} />
-        <Lightformer intensity={1.0} color="#C9A36A" position={[5, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]} scale={[6, 5, 1]} />
-        <Lightformer intensity={1.2} color="#AFC4F0" position={[-5, 2.5, 1]} rotation={[0, Math.PI / 2, 0]} scale={[5, 5, 1]} />
-        <Lightformer intensity={0.8} color="#E8D2B0" position={[0, 2.2, -5]} scale={[10, 4, 1]} />
+        <Lightformer intensity={1.4} color="#FFD8A0" position={[0, 5, -1]} rotation={[-Math.PI / 2, 0, 0]} scale={[9, 9, 1]} />
+        <Lightformer intensity={0.8} color="#FFE7C6" position={[0, 2, 4]} scale={[8, 5, 1]} />
+        <Lightformer intensity={0.5} color="#C9A36A" position={[5, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]} scale={[6, 5, 1]} />
+        <Lightformer intensity={0.6} color="#AFC4F0" position={[-5, 2.5, 1]} rotation={[0, Math.PI / 2, 0]} scale={[5, 5, 1]} />
+        <Lightformer intensity={0.35} color="#E8D2B0" position={[0, 2.2, -5]} scale={[10, 4, 1]} />
       </Environment>
 
       {/* Lighting that FITS the room — DRAMATIC, not flat: a low warm ambient so the
@@ -260,7 +260,7 @@ function Scene({
           floor (shadow caster — the real grounding), a cool side 'window' for
           separation, a warm practical under the strip, and a warm back-wall graze so
           the mirror/bench read against a gradient instead of a flat brown box. */}
-      <ambientLight intensity={0.15} color="#FFE0C0" />
+      <ambientLight intensity={0.07} color="#FFE0C0" />
       <primitive object={spotTarget} position={[0, 0.55, -0.3]} />
       <spotLight
         ref={keyRef}
@@ -280,12 +280,12 @@ function Scene({
         shadow-camera-far={12}
       />
       {/* Cool side fill — a 'window' raking from the left, separating the dark A.E.1. */}
-      <spotLight position={[-5, 3, 2]} target={spotTarget} angle={0.8} penumbra={1} intensity={7} distance={16} decay={2} color="#BFD0EE" />
+      <spotLight position={[-5, 3, 2]} target={spotTarget} angle={0.8} penumbra={1} intensity={4} distance={16} decay={2} color="#BFD0EE" />
       {/* Warm practical glow under the ceiling strip */}
-      <pointLight position={[0, 3.5, -1.6]} intensity={6} color="#FFD9A6" distance={9} decay={2} />
-      {/* Warm back-wall graze — gives the back wall + mirror + bench a gradient (lit
-          centre, darker edges) so the room has depth, not a flat brown panel. */}
-      <pointLight position={[0, 1.7, -4.4]} intensity={5} color="#FFCF95" distance={7} decay={2} />
+      <pointLight position={[0, 3.5, -1.6]} intensity={3.5} color="#FFD9A6" distance={9} decay={2} />
+      {/* Warm back-wall graze — a soft gradient on the back wall/mirror (kept low so
+          the room stays DARK + moody, matching the vault; the key pool is the focus). */}
+      <pointLight position={[0, 1.7, -4.4]} intensity={2.2} color="#FFCF95" distance={7} decay={2} />
 
       <Lounge reflective={reflective} woodTex={woodTex} plasterTex={plasterTex} />
 
@@ -326,7 +326,7 @@ export default function SkyScene({
       dpr={1}
       camera={{ position: [0, 0.58, 4.1], fov: 38, near: 0.1, far: 40 }}
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
-      style={{ background: '#140E09' }}
+      style={{ background: '#0A0806' }}
       aria-hidden="true"
       onCreated={({ gl }) => {
         try {

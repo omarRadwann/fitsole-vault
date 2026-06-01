@@ -44,8 +44,8 @@ export default function SkyBridge() {
   const sectionRef = useRef<HTMLElement>(null)
   const scrollProgress = useRef(0) // 0..1, consumed by SkyScene's useFrame
   const copyRef = useRef<HTMLDivElement>(null)
-  const floodRef = useRef<HTMLDivElement>(null)
   const resolveRef = useRef<HTMLDivElement>(null)
+  const enterRef = useRef<HTMLDivElement>(null)
   const chargeRef = useRef<HTMLDivElement>(null)
   // SkyScene runs frameloop="demand" — we call this to request a render ONLY when
   // scroll actually moves (the scene is a pure function of scroll). The big lag fix.
@@ -157,14 +157,13 @@ export default function SkyBridge() {
         const fout = p > 0.9 ? clamp01(1 - (p - 0.9) / 0.1) : 1
         copyRef.current.style.opacity = (fin * fout).toFixed(3)
       }
-      // End transition: a gentle warm flood (p .82→.90) as the camera dives in, then
-      // hands to the black resolve (p .92→1) for a seamless seam into the shop.
-      if (floodRef.current) {
-        const up = clamp01((p - 0.82) / 0.08)
-        const down = p > 0.93 ? clamp01(1 - (p - 0.93) / 0.05) : 1
-        floodRef.current.style.opacity = (up * down * 0.85).toFixed(3)
-      }
-      if (resolveRef.current) resolveRef.current.style.opacity = clamp01((p - 0.92) / 0.08).toFixed(3)
+      // ENTRANCE: the room fades UP from black over the first ~10% — a smooth reveal
+      // from the vault instead of a hard pop-in.
+      if (enterRef.current) enterRef.current.style.opacity = (1 - clamp01(p / 0.1)).toFixed(3)
+      // EXIT: a clean fade to BLACK as the camera dives in (p .84→1), seamless into the
+      // dark shop below. (The old warm-orange flood read as a flash + clashed with the
+      // dark theme — removed.)
+      if (resolveRef.current) resolveRef.current.style.opacity = clamp01((p - 0.84) / 0.16).toFixed(3)
       rafId.current = requestAnimationFrame(frame)
     }
     rafId.current = requestAnimationFrame(frame)
@@ -264,18 +263,9 @@ export default function SkyBridge() {
           </div>
         </div>
 
-        {/* End transition — a gentle warm flood blooms as the camera dives in… */}
-        <div
-          ref={floodRef}
-          aria-hidden
-          className="absolute inset-0 z-[18] pointer-events-none"
-          style={{
-            opacity: 0,
-            backgroundImage:
-              'radial-gradient(ellipse 66% 60% at 50% 56%, rgba(255,214,154,0.6), rgba(255,180,96,0.32) 38%, rgba(120,70,20,0) 74%)',
-          }}
-        />
-        {/* …then resolves to black for a seamless seam into FeaturedUnboxing. */}
+        {/* ENTRANCE fade — the room reveals UP from black as you scroll in from the vault. */}
+        <div ref={enterRef} aria-hidden className="absolute inset-0 z-[19] bg-vault-black pointer-events-none" style={{ opacity: 1 }} />
+        {/* EXIT — a clean fade to black as the camera dives in, seamless into the shop. */}
         <div ref={resolveRef} aria-hidden className="absolute inset-0 z-20 bg-vault-black pointer-events-none" style={{ opacity: 0 }} />
       </div>
     </section>
