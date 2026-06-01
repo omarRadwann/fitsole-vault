@@ -374,10 +374,16 @@ standard 512 / high 1536→1024; **audio bed streamed** via `HTMLAudioElement` i
 Hero GLB fidelity (P1), Nike-promised-but-zero-Nike-SKUs (P0 integrity), no mobile 3D signature (P1),
 WebGL-context-loss boundary (P1), real-device FPS measurement (P2). These remain the route to a 9.
 
-## Updated verdict
-The finale was the single worst-scoring scene; it is now a genuine, grounded, cinematic close.
-That + the perf/RAM wins lifts the overall readiness from **~7 → ~8/10**. The remaining gap to SOTD
-is now the §15 items (hero fidelity + mobile reach + the Nike fix), not the finale.
+## Status (live-feedback iteration — score pending sign-off)
+The finale has been through several iterations against live user feedback: gold-explosion →
+restrained dark stage → de-lag + de-mud → continuous-render smooth motion + music-on-scroll +
+all-3-screens-looping-from-entrance. The dark spotlight stage still wasn't landing for the user,
+so per their latest direction it is moving to a **real environment** (a Cairo-dusk backplate the
+pairs are lit into). The perf/RAM wins (light consolidation, env-map trim, streamed/muted-autoplay
+audio) stand independently. **No overall score is claimed here** — the user has flagged ongoing
+finale issues, so an "8/10" would be premature self-congratulation; readiness is pending their
+real-device sign-off on the finale. The non-finale gap to SOTD remains the §15 items (hero-shoe
+fidelity + mobile 3D reach + the Nike-promised-but-absent-inventory fix).
 
-*2026-06-01 — verified on the integrated path via SwiftShader + a local static build; real-GPU
-visual/FPS confirmation on the user's Iris Xe is the open loop.*
+*2026-06-01 — integrated-path verified via SwiftShader + a local static build; the finale's final
+look and the audio/motion FEEL are pending the user's real-device sign-off.*
