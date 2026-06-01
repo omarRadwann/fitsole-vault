@@ -73,6 +73,35 @@ function Pair({
 // framed mirror that reflects the pairs (live on discrete, a dark framed pane on
 // integrated). All solid PBR — premium via lighting, not textures.
 function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; woodTex: THREE.Texture; plasterTex: THREE.Texture }) {
+  // Warm "reflected-room" gradient for the mirror glass — a BAKED vertical reflection
+  // (dark top → bright warm middle where the lit lounge falls → warm-dark floor) so the
+  // mirror reads as catching the warm room light on EVERY GPU. (Env-map specular is
+  // unreliable on software/integrated rasterizers — it rendered pure BLACK under
+  // SwiftShader; a live render-reflection just mirrored the dark room → also near-black.)
+  // Self-lit a touch so it glows in the dark scene; real env reflection layers on via metalness.
+  const mirrorTex = useMemo(() => {
+    const c = document.createElement('canvas')
+    c.width = 64; c.height = 256
+    const ctx = c.getContext('2d')!
+    const g = ctx.createLinearGradient(0, 0, 0, 256)
+    g.addColorStop(0, '#14100C')
+    g.addColorStop(0.34, '#4A3826')
+    g.addColorStop(0.54, '#856640')
+    g.addColorStop(0.74, '#54402C')
+    g.addColorStop(1, '#221A12')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 64, 256)
+    // a soft vertical highlight streak — a reflected light source, left of centre
+    const s = ctx.createLinearGradient(18, 0, 42, 0)
+    s.addColorStop(0, 'rgba(255,226,180,0)')
+    s.addColorStop(0.5, 'rgba(255,226,180,0.4)')
+    s.addColorStop(1, 'rgba(255,226,180,0)')
+    ctx.fillStyle = s
+    ctx.fillRect(18, 16, 24, 224)
+    const t = new THREE.CanvasTexture(c)
+    t.colorSpace = THREE.SRGBColorSpace
+    return t
+  }, [])
   return (
     <group>
       {/* Warm WALNUT floor (real wood texture — what lifts it from a flat brown plane
@@ -136,12 +165,12 @@ function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; wood
           the 2nd (cheaper) reflection pass, on ALL GPUs so it always reads. */}
       <mesh position={[-2.23, 1.5, -4.21]} rotation={[0, 0.5, 0]}>
         <planeGeometry args={[0.62, 1.7]} />
-        {/* Mirror glass = env-reflective (reflects the warm IBL room) — NO 2nd render
-            pass, so it reads as a polished mirror at ZERO finale perf cost. (The live
-            96-res reflection was the meet-beat lag source AND the dark pairs barely
-            resolved in it — bad ROI.) Sits just proud of the GLB's ~1m-deep body so it
-            is not occluded; position confirmed earlier via a debug pass. */}
-        <meshStandardMaterial color="#100B07" metalness={1} roughness={0.1} envMapIntensity={1.5} />
+        {/* Mirror glass = the baked warm "reflected-room" gradient (mirrorTex), self-lit
+            a touch so it glows in the dark lounge — guaranteed NOT a black pane on any GPU,
+            unlike env-specular (black on SwiftShader) or a live reflection of the dark room.
+            metalness still layers a real env reflection on top where the GPU supports it.
+            Sits just proud of the GLB's ~1m-deep body so it is not occluded. */}
+        <meshStandardMaterial map={mirrorTex} emissiveMap={mirrorTex} emissive="#FFFFFF" emissiveIntensity={0.34} metalness={0.45} roughness={0.16} envMapIntensity={1.4} />
       </mesh>
       {/* Olive tree (Tripo GLB) — back-right corner, a tall warm-vibes accent. */}
       <ModelOrFallback url={ASSETS.olive} scale={2.6} position={[3.0, 1.3, -4.8]} rotation={[0, -0.3, 0]} castShadow fallback={null} />
@@ -343,7 +372,12 @@ export default function SkyScene({
   const [reflective, setReflective] = useState(false)
   return (
     <Canvas
-      shadows="percentage"
+      // Real-time shadows only on DISCRETE GPUs (reflective === !integrated). On the
+      // Iris Xe the finale always-renders + runs the floor reflection pass; a 512² shadow
+      // map on top is real per-frame cost for little gain here — the pairs stay grounded
+      // by their reflection in the polished floor. A consistent perf win with the vault's
+      // shadow gate (the user's "enhance performance"). Discrete GPUs keep the cast shadow.
+      shadows={reflective ? 'percentage' : false}
       frameloop={active ? 'always' : 'never'}
       dpr={1}
       camera={{ position: [0, 0.58, 4.1], fov: 38, near: 0.1, far: 40 }}

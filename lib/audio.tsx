@@ -12,10 +12,11 @@ import {
 } from 'react'
 import { audioEngine } from './audioEngine'
 
-// Bumped v2→v3 to clear any stale remembered mute so sound is ON by default for
-// everyone (a one-time reset of the saved preference; explicit mutes persist again
-// from here). Sound still stays silent until the first user gesture per autoplay policy.
-const STORAGE_KEY = 'fitsole-audio-v3'
+// Bumped v3→v4 to clear any stale remembered mute so sound is ON by default for
+// everyone (a one-time reset — a stray mute click during testing left the bed muted,
+// and `unmute()` correctly refuses to override a user mute, so scroll never started it).
+// Sound still stays silent until the first user gesture per the browser autoplay policy.
+const STORAGE_KEY = 'fitsole-audio-v4'
 
 interface AudioState {
   muted: boolean
