@@ -387,3 +387,45 @@ fidelity + mobile 3D reach + the Nike-promised-but-absent-inventory fix).
 
 *2026-06-01 — integrated-path verified via SwiftShader + a local static build; the finale's final
 look and the audio/motion FEEL are pending the user's real-device sign-off.*
+
+---
+
+## §17 — Finale "SUPER" polish + 2 fixes (2026-06-01, on `polish/cashier-and-tiers`)
+
+The "real environment / Cairo-dusk backplate" idea in §16's status was tried and **rejected by the
+user** ("awful", "so cheap"). The finale instead became a **warm-luxury fitting lounge** (real
+leather sofa + ornate mirror + olive tree GLBs, two dark pairs) the user signed off as "wow really
+this time", then was pushed to SUPER. Final finale state (`SkyScene.tsx` + `SkyBridge.tsx`), all
+verified on the SwiftShader / integrated-GPU path:
+
+**2 fixes**
+- **Frozen vault screens** (`VaultScene.tsx`) — the "all 3 screens loop from the entrance" change ran
+  3 concurrent H.264 decodes → the Iris Xe's fixed-function decoder overloaded and froze a screen.
+  Restored per-screen scroll-window gating so **≤2 decode at once**: drop `0.18–0.66`, cashier
+  `0.44–0.86`, membership `>0.66`. Posters cover the closed windows.
+- **Sofa faces the viewer** — the leather-sofa GLB was side-on; rotated to `-π/2` (its long axis is
+  local Z) so the seat front squares to the camera, with the mirror (left) + olive (right) framing it.
+
+**The 4 "super" elements**
+- **Cinematic camera** — replaced the near-static low angle with a scroll-driven **orbit + push-in**
+  around the meeting point (θ −19°→+23°, radius 4.6→3.3, height 0.52→0.72, always `lookAt` the pairs).
+  Pure function of scroll → smooth under `frameloop="always"`; plays as a moving film shot riding the
+  pairs' scroll-spin.
+- **Real reflections** — the floor is now `MeshReflectorMaterial` on **all GPUs** (128-res) so the
+  pairs reflect in the polished wood right under them (the headline reflection); a 96-res
+  `MeshReflectorMaterial` plane sits exactly on the mirror's glass (placed proud of the GLB's ~1m-deep
+  body — bbox-derived, confirmed via a debug-cyan pass) so the room + pairs reflect in the mirror.
+  **Perf note:** these are 2 extra scene-render passes/frame on the always-render iGPU finale — the
+  **first dial-back lever** if lag returns is the mirror pass (→ a no-pass env-glass material).
+- **Hero light + glow** — the warm KEY swells into a reveal at the meet (44 → ~72 at p≈0.5) and a
+  screen-blended warm **CSS bloom** flares at the exact meeting then settles (compositor-cheap, no GPU
+  post-pass) — a held cinematic "reveal".
+- **Richer atmosphere** — a taller/stronger volumetric god-ray cone + denser floating dust with two
+  slow warm embers in the beam (all CSS/compositor → ~free).
+
+**Known cosmetic:** the A.E.1 GLB has a lime-green panel baked into its **albedo** (a Tripo-generation
+colorway) — moderating the key + env specular did NOT calm it (it is not specular blowout). Fixable
+only by retexturing the model; left as an optional follow-up.
+
+*Pending the user's real-device pass on: the un-freeze, the camera feel, the two reflections, and the
+lag (the reflections are the cost — dial-back lever noted above).*

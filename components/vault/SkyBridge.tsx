@@ -25,6 +25,17 @@ const MOTES = [
   { x: 42, y: 76, s: 2, d: 15, delay: 10 },
   { x: 58, y: 54, s: 4, d: 12, delay: 6 },
   { x: 71, y: 70, s: 2, d: 18, delay: 2 },
+  // Denser dust + two slow warm EMBERS (s:5) for a richer beam.
+  { x: 46, y: 36, s: 2, d: 23, delay: 4 },
+  { x: 54, y: 50, s: 3, d: 17, delay: 11 },
+  { x: 40, y: 64, s: 2, d: 20, delay: 7 },
+  { x: 62, y: 52, s: 3, d: 15, delay: 1 },
+  { x: 48, y: 70, s: 2, d: 19, delay: 9 },
+  { x: 36, y: 50, s: 2, d: 22, delay: 12 },
+  { x: 66, y: 80, s: 3, d: 16, delay: 5 },
+  { x: 51, y: 42, s: 2, d: 21, delay: 8 },
+  { x: 44, y: 56, s: 5, d: 26, delay: 2 },
+  { x: 57, y: 61, s: 5, d: 28, delay: 13 },
 ]
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
 
@@ -47,6 +58,7 @@ export default function SkyBridge() {
   const resolveRef = useRef<HTMLDivElement>(null)
   const enterRef = useRef<HTMLDivElement>(null)
   const chargeRef = useRef<HTMLDivElement>(null)
+  const glowRef = useRef<HTMLDivElement>(null)
   // SkyScene runs frameloop="demand" — we call this to request a render ONLY when
   // scroll actually moves (the scene is a pure function of scroll). The big lag fix.
   const invalidateRef = useRef<(() => void) | null>(null)
@@ -152,6 +164,12 @@ export default function SkyBridge() {
       if (chargeRef.current) {
         chargeRef.current.style.opacity = (clamp01((p - 0.3) / 0.18) * (p < 0.49 ? 1 : 0)).toFixed(3)
       }
+      // HERO REVEAL — a warm bloom flares at the exact meeting (p≈0.5) then settles, so
+      // the moment the pairs meet lands as a held cinematic beat (pairs with the 3D key
+      // swell). Gaussian, screen-blended → adds light like a real bloom. Compositor-cheap.
+      if (glowRef.current) {
+        glowRef.current.style.opacity = (Math.exp(-(((p - 0.5) / 0.09) ** 2)) * 0.6).toFixed(3)
+      }
       if (copyRef.current) {
         const fin = clamp01((p - 0.54) / 0.12)
         const fout = p > 0.9 ? clamp01(1 - (p - 0.9) / 0.1) : 1
@@ -196,8 +214,9 @@ export default function SkyBridge() {
             backgroundImage:
               // A soft warm 'god-ray' cone spilling from the ceiling light over the pairs
               // (good-vibes atmosphere) + a gentle vignette to focus the frame.
-              'radial-gradient(ellipse 24% 60% at 50% 0%, rgba(255,222,172,0.13), transparent 56%),' +
-              'radial-gradient(ellipse 96% 96% at 50% 46%, transparent 62%, rgba(0,0,0,0.42) 100%)',
+              // Stronger, taller volumetric god-ray spilling from the ceiling strip.
+              'radial-gradient(ellipse 30% 78% at 50% 0%, rgba(255,224,176,0.2), rgba(255,206,150,0.06) 44%, transparent 72%),' +
+              'radial-gradient(ellipse 96% 96% at 50% 46%, transparent 60%, rgba(0,0,0,0.46) 100%)',
           }}
         />
 
@@ -242,6 +261,15 @@ export default function SkyBridge() {
           aria-hidden
           className="absolute inset-0 pointer-events-none z-[5]"
           style={{ opacity: 0, backgroundImage: 'radial-gradient(ellipse 28% 26% at 50% 60%, rgba(255,216,150,0.5), rgba(255,184,104,0.12) 46%, transparent 72%)' }}
+        />
+
+        {/* HERO bloom — a warm flare at the meeting (screen blend = adds light, not a
+            grey overlay) so the meet lands as a luminous reveal, then settles. */}
+        <div
+          ref={glowRef}
+          aria-hidden
+          className="absolute inset-0 pointer-events-none z-[6] mix-blend-screen"
+          style={{ opacity: 0, backgroundImage: 'radial-gradient(ellipse 55% 48% at 50% 52%, rgba(255,228,170,0.6), rgba(255,198,122,0.2) 42%, transparent 70%)' }}
         />
 
         {/* Copy + CTA (lands after the meeting, upper area) */}

@@ -366,11 +366,12 @@ function CashierVideo({ active, scrollProgress }: { active: boolean; scrollProgr
   useFrame(() => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid || !matRef.current) return
-    // Loop continuously while the vault is on-screen (user: "all 3 screens should
-    // play in a loop since the entrance"). Paused when the vault parks off-screen
-    // (effect above) to release the decoder while shopping. Driven off the REAL
-    // vid.paused so a play() that rejects after a park→resume self-heals.
-    const shouldPlay = active
+    // Play only while the COUNTER is near frame (~0.44–0.86) so at most TWO of the
+    // three screens decode at once — three concurrent H.264 streams overload the iGPU's
+    // fixed-function decoder and FREEZE a screen. Poster covers it otherwise; self-heals
+    // off the real vid.paused.
+    const p = scrollProgress.current
+    const shouldPlay = active && p > 0.44 && p < 0.86
     if (shouldPlay) {
       if (vid.paused) vid.play().catch(() => {})
     } else if (!vid.paused) {
@@ -868,8 +869,11 @@ function VaultVideoScreen({
   useFrame(() => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid) return
-    // Loop from the entrance (user request) while the vault is on-screen.
-    const shouldPlay = active
+    // Play across the drop-wall beat (~0.18–0.66), handing off to the membership film
+    // (starts 0.66) — never 3 screens decoding at once (that froze the iGPU). Poster
+    // covers it otherwise.
+    const p = scrollProgress.current
+    const shouldPlay = active && p > 0.18 && p < 0.66
     if (shouldPlay) {
       if (vid.paused) vid.play().catch(() => {})
     } else if (!vid.paused) {
@@ -1074,11 +1078,10 @@ function MembershipFilm({ active, scrollProgress }: { active: boolean; scrollPro
   useFrame(() => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid) return
-    // Loop from the entrance like the other two screens (user request). NOTE: up to
-    // 3 concurrent H.264 decodes on the iGPU — historically that could drop a screen
-    // to black under scroll-thrash; the poster fallback covers a stalled decode so it
-    // never goes black. Pauses when the vault parks off-screen (effect above).
-    const shouldPlay = active
+    // Play only from the APPROACH onward (p>0.66) so it never decodes alongside BOTH
+    // the drop + cashier screens — caps concurrent H.264 at 2 (3 froze a screen on the
+    // iGPU). The poster covers the load gap. Pauses when the vault parks off-screen.
+    const shouldPlay = active && scrollProgress.current > 0.66
     if (shouldPlay) {
       if (vid.paused) vid.play().catch(() => {})
     } else if (!vid.paused) {

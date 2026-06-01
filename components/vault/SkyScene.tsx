@@ -54,7 +54,7 @@ function Pair({
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
-            envMapIntensity={1.2}
+            envMapIntensity={0.9}
             fallback={
               <mesh material={fallbackMat} castShadow position={[0, 0.45, 0]}>
                 <boxGeometry args={[1, 0.45, 0.36]} />
@@ -80,11 +80,9 @@ function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; wood
           discrete; glossy textured static on integrated. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]} receiveShadow>
         <planeGeometry args={[22, 24]} />
-        {reflective ? (
-          <MeshReflectorMaterial map={woodTex} resolution={128} blur={[160, 70]} mixBlur={1} mixStrength={0.5} depthScale={0.5} color="#6E4E30" metalness={0.1} roughness={0.5} />
-        ) : (
-          <meshStandardMaterial map={woodTex} color="#6E4E30" roughness={0.32} metalness={0.0} />
-        )}
+        {/* Live reflection on ALL GPUs now (low 128 res) so the pairs reflect in the
+            polished wood right under them — the immersive "real room" magic. */}
+        <MeshReflectorMaterial map={woodTex} resolution={128} blur={[200, 90]} mixBlur={1} mixStrength={0.6} depthScale={0.6} color="#6E4E30" metalness={0.12} roughness={0.42} />
       </mesh>
 
       {/* Warm plaster enclosure — back + side walls (real plaster texture) + a plain ceiling */}
@@ -120,7 +118,7 @@ function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; wood
         url={ASSETS.sofa}
         scale={2.4}
         position={[0, 0.65, -3.5]}
-        rotation={[0, Math.PI / 2, 0]}
+        rotation={[0, -Math.PI / 2, 0]}
         castShadow
         fallback={
           <RoundedBox args={[2.3, 0.5, 0.9]} radius={0.08} smoothness={3} position={[0, 0.4, -3.5]} material={leatherMat} castShadow />
@@ -131,6 +129,19 @@ function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; wood
           it reads BESIDE the sofa (it was lost dead-centre behind it) + its frame
           catches the warm light. */}
       <ModelOrFallback url={ASSETS.mirror} scale={2.8} position={[-2.5, 1.4, -4.7]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
+      {/* Live reflective GLASS on the mirror's face so the pairs reflect IN the mirror
+          (the fitting-room magic). Placed at the mirror's front-face centre in world
+          space — bbox depth 0.1787 × scale 2.8 ≈ 0.5 along the y=0.5 normal (0.48,0,0.88),
+          recessed to ~0.46 so it sits inside the frame — matching its yaw. Low 96-res:
+          the 2nd (cheaper) reflection pass, on ALL GPUs so it always reads. */}
+      <mesh position={[-2.22, 1.5, -4.19]} rotation={[0, 0.5, 0]}>
+        <planeGeometry args={[0.62, 1.7]} />
+        {/* Live reflection — sits exactly on the glass (confirmed via a debug pass; it
+            had to be proud of the mirror's ~1m-deep body, not recessed). 96-res low pass:
+            the pairs + warm room reflect IN the mirror. This is the 2nd reflection pass —
+            the FIRST dial-back lever if the iGPU lags (swap to an env-glass material). */}
+        <MeshReflectorMaterial resolution={96} mirror={0.92} mixStrength={1} blur={[0, 0]} mixBlur={0} depthScale={0} roughness={0.06} metalness={0.5} color="#181109" />
+      </mesh>
       {/* Olive tree (Tripo GLB) — back-right corner, a tall warm-vibes accent. */}
       <ModelOrFallback url={ASSETS.olive} scale={2.6} position={[3.0, 1.3, -4.8]} rotation={[0, -0.3, 0]} castShadow fallback={null} />
     </group>
@@ -196,15 +207,16 @@ function Scene({
     const p = scrollProgress.current
     const camera = state.camera
 
-    // ── CAMERA — low, heroic; slow dolly-in through the approach + a push-in at the end.
+    // ── CINEMATIC CAMERA — a slow ORBIT + push-in around the meeting point, so the
+    // finale plays like a moving film shot (riding with the pairs' scroll-spin). Pure
+    // function of scroll → smooth under always-render.
     const dive = smooth(clamp01((p - 0.86) / 0.14))
-    // Camera pulled back + lower for the SMALLER pairs (user: "they are so big") — frames
-    // them modestly in the room rather than filling the screen.
-    const ce = smooth(clamp01(p / 0.5))
-    camera.position.z = lerp(lerp(4.3, 3.7, ce), 3.1, dive)
-    camera.position.y = lerp(0.5, 0.62, dive)
-    camera.position.x = Math.sin(p * Math.PI) * 0.1
-    camera.lookAt(0, lerp(0.5, 0.56, dive), -0.6)
+    const cx = 0, cy = 0.55, cz = -0.4 // orbit centre ≈ the meeting point
+    const theta = lerp(-0.34, 0.4, smooth(p)) // a gentle left→right arc (~-19°→+23°)
+    const radius = lerp(4.6, 3.3, smooth(clamp01(p / 0.7))) - dive * 0.5 // ease in + a push at the end
+    const camH = lerp(0.52, 0.72, smooth(p))
+    camera.position.set(cx + Math.sin(theta) * radius, camH, cz + Math.cos(theta) * radius)
+    camera.lookAt(cx, cy + dive * 0.06, cz)
 
     // ── THE WALK + SCROLL-DRIVEN SPIN ──────────────────────────────────────────
     // FASTER walk-in (user: "move faster") — the pairs roll in from the wings and
@@ -236,10 +248,10 @@ function Scene({
     if (lBob.current) { lBob.current.position.y = baseY + floatL; lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt }
     if (rBob.current) { rBob.current.position.y = baseY + floatR; rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt }
 
-    // Warm key swells gently at the meeting, then settles for the presentation.
+    // Warm key swells into a hero "REVEAL" at the meeting, then settles for the present.
     if (keyRef.current) {
-      const glow = Math.exp(-(((p - 0.5) / 0.17) ** 2))
-      keyRef.current.intensity = 46 + glow * 20
+      const glow = Math.exp(-(((p - 0.5) / 0.16) ** 2))
+      keyRef.current.intensity = 44 + glow * 28
     }
   })
 
