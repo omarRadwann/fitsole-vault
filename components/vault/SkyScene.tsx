@@ -3,8 +3,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer, MeshReflectorMaterial, ContactShadows } from '@react-three/drei'
-import { EffectComposer, Bloom, ToneMapping, SMAA } from '@react-three/postprocessing'
-import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
@@ -19,7 +17,7 @@ const fallbackMat = new THREE.MeshStandardMaterial({ color: '#3A352E', roughness
 // metalness tuned so the warm IBL + the light-pool below read as polished stone,
 // not the dead-black void the old #0E0B08@0.22 collapsed to in capture. Discrete
 // GPUs get the live MeshReflectorMaterial reflection instead (see Scene).
-const staticFloorMat = new THREE.MeshStandardMaterial({ color: '#120D09', roughness: 0.3, metalness: 0.85 })
+const staticFloorMat = new THREE.MeshStandardMaterial({ color: '#0B0806', roughness: 0.26, metalness: 0.88 })
 
 // Warm champagne "pool of light" laid on the floor under the meeting point, so the
 // pairs read as standing IN a lit pool on a real floor — the single cheapest fix
@@ -30,8 +28,9 @@ function usePoolTexture() {
     c.width = c.height = 256
     const ctx = c.getContext('2d')!
     const g = ctx.createRadialGradient(128, 128, 4, 128, 128, 128)
-    g.addColorStop(0, 'rgba(255,212,156,0.55)')
-    g.addColorStop(0.42, 'rgba(255,186,118,0.2)')
+    g.addColorStop(0, 'rgba(255,216,160,0.6)')
+    g.addColorStop(0.3, 'rgba(255,190,120,0.22)')
+    g.addColorStop(0.62, 'rgba(255,176,100,0.05)')
     g.addColorStop(1, 'rgba(255,176,100,0)')
     ctx.fillStyle = g
     ctx.fillRect(0, 0, 256, 256)
@@ -52,9 +51,9 @@ function useBackdropTexture() {
     c.height = 256
     const ctx = c.getContext('2d')!
     const g = ctx.createLinearGradient(0, 256, 0, 0) // bottom → top
-    g.addColorStop(0, 'rgba(48,33,20,1)') // warm lift near the floor line
-    g.addColorStop(0.4, 'rgba(18,13,9,1)')
-    g.addColorStop(1, 'rgba(8,6,5,1)') // fades into the void up top
+    g.addColorStop(0, 'rgba(26,20,14,1)') // subtle warm floor-line lift (was a muddy brown band)
+    g.addColorStop(0.32, 'rgba(13,10,8,1)')
+    g.addColorStop(1, 'rgba(7,6,5,1)') // fades into the void up top
     ctx.fillStyle = g
     ctx.fillRect(0, 0, 16, 256)
     const t = new THREE.CanvasTexture(c)
@@ -73,8 +72,8 @@ function useShadowTexture() {
     c.width = c.height = 128
     const ctx = c.getContext('2d')!
     const g = ctx.createRadialGradient(64, 64, 2, 64, 64, 64)
-    g.addColorStop(0, 'rgba(0,0,0,0.82)')
-    g.addColorStop(0.5, 'rgba(0,0,0,0.34)')
+    g.addColorStop(0, 'rgba(0,0,0,0.95)')
+    g.addColorStop(0.4, 'rgba(0,0,0,0.5)')
     g.addColorStop(1, 'rgba(0,0,0,0)')
     ctx.fillStyle = g
     ctx.fillRect(0, 0, 128, 128)
@@ -122,9 +121,9 @@ function Pair({
         </Suspense>
       </group>
       {shadowTex && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0.02]}>
-          <planeGeometry args={[1.35, 0.66]} />
-          <meshBasicMaterial map={shadowTex} transparent depthWrite={false} opacity={0.85} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.013, 0]}>
+          <planeGeometry args={[1.2, 0.58]} />
+          <meshBasicMaterial map={shadowTex} transparent depthWrite={false} opacity={0.92} />
         </mesh>
       )}
     </group>
@@ -174,10 +173,10 @@ function Scene({
     // (under the warm CSS flood) reads as moving into the vault, into the shop.
     const e = smooth(clamp01(p / 0.5)) // 0 entrance → 1 at the meet
     const dive = smooth(clamp01((p - 0.86) / 0.14))
-    camera.position.z = lerp(lerp(4.35, 3.7, e), 2.95, dive)
-    camera.position.y = lerp(0.58, 0.74, dive)
-    camera.position.x = Math.sin(p * Math.PI) * 0.12 // gentle dolly-arc parallax
-    camera.lookAt(0, lerp(0.74, 0.82, dive), 0)
+    camera.position.z = lerp(lerp(4.0, 3.35, e), 2.7, dive) // closer → the pairs read larger/more present
+    camera.position.y = lerp(0.55, 0.72, dive)
+    camera.position.x = Math.sin(p * Math.PI) * 0.1 // gentle dolly-arc parallax
+    camera.lookAt(0, lerp(0.7, 0.8, dive), 0)
 
     // ── THE WALK ──────────────────────────────────────────────────────────────
     // Two pairs STRIDE in from the wings and PLANT at centre. The gait (bob + rock +
@@ -194,8 +193,8 @@ function Scene({
     const present = smooth(clamp01((Math.min(p, 0.86) - 0.5) / 0.36))
     const presentYaw = reduced ? 0 : present * 0.24
 
-    const lx = lerp(-5.0, -0.8, e)
-    const rx = lerp(5.0, 0.8, e)
+    const lx = lerp(-5.0, -0.72, e)
+    const rx = lerp(5.0, 0.72, e)
     const y = bobUp - settle
     if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = presentYaw }
     if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -presentYaw }
@@ -267,9 +266,9 @@ function Scene({
 
       {/* Warm pool of light on the floor — the pairs stand IN it (kills the "floating
           in a void" read). Additive so it only lifts the stone, never muddies it. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0.1]}>
-        <planeGeometry args={[7, 4.6]} />
-        <meshBasicMaterial map={poolTex} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} opacity={0.9} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0.15]}>
+        <planeGeometry args={[5.4, 3.2]} />
+        <meshBasicMaterial map={poolTex} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} opacity={0.95} />
       </mesh>
 
       {/* Grounding, tier-aware: real shoe-shaped ContactShadows on discrete GPUs; on
@@ -282,20 +281,10 @@ function Scene({
       <Pair url={ASSETS.cloudmonster} faceSign={1} outerRef={lOuter} bobRef={lBob} shadowTex={reflective ? null : shadowTex} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} shadowTex={reflective ? null : shadowTex} />
 
-      {/* AA + filmic grade to match the vault (the finale is demand-rendered, so this
-          only runs on scroll → affordable). SMAA stops the reflection/silhouette
-          edges crawling; ACES tonemap matches the vault's graded look on every GPU.
-          Bloom only on discrete — a full-screen mipmapped bloom is the heaviest pass
-          on an integrated GPU, and the warm scene reads fine through ACES without it. */}
-      <EffectComposer multisampling={0}>
-        {([
-          reflective ? (
-            <Bloom key="bloom" mipmapBlur intensity={0.5} luminanceThreshold={0.8} luminanceSmoothing={0.3} />
-          ) : null,
-          <ToneMapping key="tonemap" mode={ToneMappingMode.ACES_FILMIC} />,
-          <SMAA key="smaa" />,
-        ].filter(Boolean) as React.ReactElement[])}
-      </EffectComposer>
+      {/* No post-processing composer: the Canvas is NOT `flat`, so R3F applies ACES
+          filmic tonemapping in-shader (correct color + highlight rolloff) and
+          antialias:true gives hardware MSAA — both WITHOUT a per-frame full-screen
+          pass, keeping the demand-rendered scroll snappy on the Iris Xe. */}
     </>
   )
 }
@@ -306,7 +295,8 @@ function Scene({
 //     a held frame costs ZERO GPU (the scene is a pure function of scroll).
 //   • dpr pinned to 1.0 → no fill-rate blow-up on integrated GPUs.
 //   • Few real-time lights + baked IBL (free). Reflection is one cheap 128px FBO
-//     pass on discrete only. Bloom discrete-only; SMAA + ACES on every GPU.
+//     pass on discrete only. NO post-composer — native ACES tonemap + MSAA (cheaper
+//     than a full-screen SMAA/ToneMapping pass per scroll frame on an iGPU).
 //   • The gold meet-accent, vignette, beam, dust + flood transition are cheap CSS
 //     overlays in SkyBridge.
 export default function SkyScene({
@@ -325,10 +315,12 @@ export default function SkyScene({
   const [reflective, setReflective] = useState(false)
   return (
     <Canvas
-      flat
+      // NOT `flat`: R3F applies ACES tonemapping + sRGB natively (in-shader, no extra
+      // pass) and antialias:true gives hardware MSAA — premium color + clean edges
+      // without a full-screen composer taxing every scroll frame on the Iris Xe.
       frameloop={active ? 'demand' : 'never'}
       dpr={1}
-      camera={{ position: [0, 0.58, 4.35], fov: 40, near: 0.1, far: 40 }}
+      camera={{ position: [0, 0.55, 3.9], fov: 38, near: 0.1, far: 40 }}
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       shadows={false}
       style={{ background: '#0A0908' }}

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import Image from 'next/image'
-import { audioEngine } from '@/lib/audioEngine'
 import { useBedSection } from '@/lib/audio'
 
 // Real 3D finale (WebGL/R3F) — client-only, like VaultCanvas.
@@ -61,10 +60,12 @@ export default function SkyBridge() {
   const [inView, setInView] = useState(false)
   const [reduced, setReduced] = useState(false)
   const [mobile, setMobile] = useState(false)
-  // Keep the ambient music playing through the finale (not just the vault). The
-  // shared registry ORs this with the vault + video sections.
+  // Keep the ambient MUSIC BED playing through the finale (not just the vault). The
+  // shared registry ORs this with the vault + video sections, so the same track that
+  // plays in the vault carries straight into "The Meeting" — no separate cue. (The
+  // old synth `ney`/`chime` cues were removed: they sounded cheap AND ducked the bed
+  // −6 dB, so you heard the awful placeholder instead of the music.)
   useBedSection(!mobile && inView)
-  const neyFired = useRef(false)
   const armed = useRef(false)
   const rafId = useRef(0)
   const offset = useRef(0)
@@ -106,10 +107,6 @@ export default function SkyBridge() {
         setInView(e.isIntersecting)
         // Fade the store header to full-bleed the cinematic frame (Header listens).
         window.dispatchEvent(new CustomEvent('fitsole:finale', { detail: e.isIntersecting }))
-        if (e.isIntersecting && !reduced && !neyFired.current) {
-          neyFired.current = true
-          audioEngine.playCue('ney')
-        }
       },
       { threshold: 0 }
     )
@@ -118,7 +115,7 @@ export default function SkyBridge() {
       io.disconnect()
       window.dispatchEvent(new CustomEvent('fitsole:finale', { detail: false }))
     }
-  }, [reduced])
+  }, [])
 
   // Scroll driver — writes scrollProgress (the 3D scene reads it) + the DOM overlay
   // (soft ring at the meeting, copy fade, warm flood, resolve-to-black). In view only.
@@ -159,7 +156,6 @@ export default function SkyBridge() {
         if (p >= 0.48 && !armed.current) {
           armed.current = true
           burstRef.current.classList.add('burst')
-          audioEngine.playCue('chime')
         } else if (p < 0.4 && armed.current) {
           armed.current = false
           burstRef.current.classList.remove('burst')
@@ -193,7 +189,7 @@ export default function SkyBridge() {
   }, [inView, reduced])
 
   return (
-    <section ref={sectionRef} aria-label="FitSole — two drops, one vault" className="relative h-[400vh] w-full">
+    <section ref={sectionRef} aria-label="FitSole — two drops, one vault" className="relative h-[240vh] w-full">
       <div className="sticky top-0 h-screen w-full overflow-hidden bg-vault-black">
         {/* The real 3D scene (or a premium static render on the no-WebGL mobile path) */}
         {mobile ? (
