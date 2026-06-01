@@ -22,6 +22,9 @@ interface AudioState {
   muted: boolean
   toggle: () => void
   hydrated: boolean
+  // True once the ambient music is ACTUALLY audible (polled from audioEngine.bedAudible).
+  // The header stops the "tap for sound" speaker pulse once this flips.
+  started: boolean
   // Register/unregister a section as wanting the ambient bed on. The bed plays
   // while ANY registered section is active (see useBedSection).
   setBedSection: (id: string, active: boolean) => void
@@ -41,6 +44,9 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   // there's no hydration divergence (same pattern as the cart).
   const [muted, setMuted] = useState(true)
   const [hydrated, setHydrated] = useState(false)
+  // Flips true the instant the ambient bed becomes audible (a real gesture started it).
+  // Drives the header's "tap for sound" speaker pulse: nudge until this is true.
+  const [started, setStarted] = useState(false)
 
   // Ambient-bed coordination. The bed plays while ANY cinematic section (vault,
   // finale, unboxing video) is in view, and fades out once the user reaches the
@@ -59,6 +65,19 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     audioEngine.setBedActive(bedAny)
   }, [bedAny])
+
+  // Poll for the bed becoming audible (a real gesture started it) → stop the header
+  // speaker pulse. Cheap (400ms) and self-cancels the moment sound is on.
+  useEffect(() => {
+    if (!hydrated || started) return
+    const id = setInterval(() => {
+      if (audioEngine.bedAudible) {
+        setStarted(true)
+        clearInterval(id)
+      }
+    }, 400)
+    return () => clearInterval(id)
+  }, [hydrated, started])
 
   useEffect(() => {
     // Sound is ON by default for everyone (it stays silent until the first user
@@ -121,7 +140,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AudioCtx.Provider value={{ muted, toggle, hydrated, setBedSection }}>
+    <AudioCtx.Provider value={{ muted, toggle, hydrated, started, setBedSection }}>
       {children}
     </AudioCtx.Provider>
   )

@@ -24,7 +24,7 @@ export default function Header() {
   // Fade the whole header out to full-bleed the cinematic finale ("The Meeting").
   const [finaleActive, setFinaleActive] = useState(false)
   const { count, setOpen } = useCart()
-  const { muted, toggle: toggleAudio } = useAudio()
+  const { muted, started, toggle: toggleAudio } = useAudio()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
@@ -118,7 +118,13 @@ export default function Header() {
               onClick={toggleAudio}
               aria-label={muted ? 'Unmute ambient sound' : 'Mute ambient sound'}
               aria-pressed={!muted}
-              className="text-vault-cream/70 hover:text-vault-gold hover:bg-vault-gold/10 rounded-full transition-colors duration-300 p-2"
+              className={cn(
+                'text-vault-cream/70 hover:text-vault-gold hover:bg-vault-gold/10 rounded-full transition-colors duration-300 p-2',
+                // Nudge: while sound is ON but not yet started, pulse the speaker gold so the
+                // visitor knows one tap/key/click turns it on (browsers block audio on pure
+                // scroll). Stops the instant music plays.
+                !muted && !started && 'speaker-nudge'
+              )}
             >
               {muted ? (
                 <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">

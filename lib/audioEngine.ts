@@ -101,6 +101,14 @@ class AudioEngine {
     return this.ctx !== null && this.ctx.state === 'running'
   }
 
+  /** True once the ambient MUSIC BED <audio> is actually AUDIBLE — created, unmuted, and
+   *  playing. The header reads this to stop the "tap for sound" speaker pulse the instant
+   *  real sound starts. We read the element's TRUE state (not hasInteracted) because a
+   *  wheel/scroll may flip .muted while Chrome keeps it silent without a real gesture. */
+  get bedAudible(): boolean {
+    return !!this.bedEl && !this.bedEl.muted && !this.bedEl.paused
+  }
+
   // The bed's "active" level — a faint room-tone underlayer.
   private bedTarget(): number {
     return this.bedActive ? this.bedVol : 0
