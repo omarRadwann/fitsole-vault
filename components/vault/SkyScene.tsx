@@ -2,10 +2,11 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Environment, Lightformer, MeshReflectorMaterial, RoundedBox } from '@react-three/drei'
+import { Environment, Lightformer, MeshReflectorMaterial, RoundedBox, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
+import { withBase } from '@/lib/basePath'
 import { isIntegratedGpu, readGpuRenderer } from '@/lib/deviceTier'
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
@@ -49,7 +50,7 @@ function Pair({
         <Suspense fallback={null}>
           <ModelOrFallback
             url={url}
-            normalizeTo={1.55}
+            normalizeTo={1.0}
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
@@ -71,37 +72,33 @@ function Pair({
 // baseboard, an emissive ceiling light strip, a leather try-on bench, and a brass-
 // framed mirror that reflects the pairs (live on discrete, a dark framed pane on
 // integrated). All solid PBR — premium via lighting, not textures.
-function Lounge({ reflective }: { reflective: boolean }) {
+function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; woodTex: THREE.Texture; plasterTex: THREE.Texture }) {
   return (
     <group>
-      {/* Wood floor — receives the real shadows; reflects the lit warm room (NOT a
-          grey void). Live blurred reflection on discrete; glossy static on integrated. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]} material={reflective ? undefined : woodFloorMat} receiveShadow>
+      {/* Warm WALNUT floor (real wood texture — what lifts it from a flat brown plane
+          to a real floor). Receives the pairs' real shadows + a live reflection on
+          discrete; glossy textured static on integrated. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]} receiveShadow>
         <planeGeometry args={[22, 24]} />
-        {reflective && (
-          <MeshReflectorMaterial
-            resolution={128}
-            blur={[220, 90]}
-            mixBlur={1}
-            mixStrength={1.1}
-            depthScale={0.7}
-            minDepthThreshold={0.3}
-            color="#241710"
-            metalness={0.25}
-            roughness={0.5}
-          />
+        {reflective ? (
+          <MeshReflectorMaterial map={woodTex} resolution={128} blur={[160, 70]} mixBlur={1} mixStrength={0.45} depthScale={0.5} color="#ffffff" metalness={0.1} roughness={0.5} />
+        ) : (
+          <meshStandardMaterial map={woodTex} roughness={0.3} metalness={0.0} />
         )}
       </mesh>
 
-      {/* Warm plaster enclosure — back wall + two side walls + ceiling */}
-      <mesh position={[0, 2.3, -6]} material={plasterMat} receiveShadow>
+      {/* Warm plaster enclosure — back + side walls (real plaster texture) + a plain ceiling */}
+      <mesh position={[0, 2.3, -6]} receiveShadow>
         <planeGeometry args={[16, 6]} />
+        <meshStandardMaterial map={plasterTex} roughness={0.96} metalness={0} />
       </mesh>
-      <mesh position={[-7, 2.3, -1]} rotation={[0, Math.PI / 2, 0]} material={plasterMat}>
+      <mesh position={[-7, 2.3, -1]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[14, 6]} />
+        <meshStandardMaterial map={plasterTex} roughness={0.96} metalness={0} />
       </mesh>
-      <mesh position={[7, 2.3, -1]} rotation={[0, -Math.PI / 2, 0]} material={plasterMat}>
+      <mesh position={[7, 2.3, -1]} rotation={[0, -Math.PI / 2, 0]}>
         <planeGeometry args={[14, 6]} />
+        <meshStandardMaterial map={plasterTex} roughness={0.96} metalness={0} />
       </mesh>
       <mesh position={[0, 4.4, -1]} rotation={[Math.PI / 2, 0, 0]} material={plasterMat}>
         <planeGeometry args={[16, 14]} />
@@ -164,6 +161,17 @@ function Scene({
   const shadowTick = useRef(0)
   const { invalidate } = useThree()
 
+  // Room textures (real walnut + plaster — the "not cheap" richness). Tiled across the
+  // surfaces; loaded here since Scene is already inside Suspense. wrap/repeat mutation
+  // is idempotent per render.
+  const [woodTex, plasterTex] = useTexture([withBase('/textures/wood-floor.webp'), withBase('/textures/plaster.webp')])
+  woodTex.wrapS = woodTex.wrapT = THREE.RepeatWrapping
+  woodTex.repeat.set(5, 6)
+  woodTex.colorSpace = THREE.SRGBColorSpace
+  plasterTex.wrapS = plasterTex.wrapT = THREE.RepeatWrapping
+  plasterTex.repeat.set(4, 2)
+  plasterTex.colorSpace = THREE.SRGBColorSpace
+
   // Render once on mount; invalidateRef kept for SkyBridge (harmless under "always").
   useEffect(() => {
     invalidateRef.current = invalidate
@@ -192,28 +200,35 @@ function Scene({
     const camera = state.camera
 
     // ── CAMERA — low, heroic; slow dolly-in through the approach + a push-in at the end.
-    const e = smooth(clamp01(p / 0.5))
     const dive = smooth(clamp01((p - 0.86) / 0.14))
-    camera.position.z = lerp(lerp(4.1, 3.4, e), 2.7, dive)
-    camera.position.y = lerp(0.58, 0.74, dive)
+    // Camera pulled back + lower for the SMALLER pairs (user: "they are so big") — frames
+    // them modestly in the room rather than filling the screen.
+    const ce = smooth(clamp01(p / 0.5))
+    camera.position.z = lerp(lerp(4.3, 3.7, ce), 3.1, dive)
+    camera.position.y = lerp(0.5, 0.62, dive)
     camera.position.x = Math.sin(p * Math.PI) * 0.1
-    camera.lookAt(0, lerp(0.72, 0.82, dive), -0.6)
+    camera.lookAt(0, lerp(0.5, 0.56, dive), -0.6)
 
-    // ── THE WALK — stride in from the wings, ease to a PLANT + present at centre.
-    const gait = reduced ? 0 : 1 - smooth(clamp01((p - 0.32) / 0.18))
-    const steps = clamp01(p / 0.5) * 4 * Math.PI * 2
+    // ── THE WALK + SCROLL-DRIVEN SPIN ──────────────────────────────────────────
+    // FASTER walk-in (user: "move faster") — the pairs roll in from the wings and
+    // arrive at centre by ~p0.3 (was 0.5). Then a FULL scroll-driven rotation (user:
+    // "full rotate based of scroll speed"): the spin angle tracks scroll POSITION, so
+    // scrolling faster spins them faster; ~2.5 turns across the finale. Pure function
+    // of scroll → smooth under always-render, holds its angle at rest.
+    const we = smooth(clamp01(p / 0.3))
+    const gait = reduced ? 0 : 1 - smooth(clamp01((p - 0.18) / 0.12))
+    const steps = clamp01(p / 0.3) * 4 * Math.PI * 2
     const bobUp = Math.abs(Math.sin(steps)) * 0.03 * gait
-    const settle = reduced ? 0 : Math.exp(-(((p - 0.5) / 0.05) ** 2)) * 0.02
+    const settle = reduced ? 0 : Math.exp(-(((p - 0.3) / 0.05) ** 2)) * 0.02
     const rock = Math.sin(steps) * 0.05 * gait
-    const lean = (1 - smooth(clamp01((p - 0.34) / 0.16))) * 0.1 * (reduced ? 0 : 1)
-    const present = smooth(clamp01((Math.min(p, 0.86) - 0.5) / 0.36))
-    const presentYaw = reduced ? 0 : present * 0.24
+    const lean = (1 - smooth(clamp01((p - 0.2) / 0.12))) * 0.1 * (reduced ? 0 : 1)
+    const spin = reduced ? 0 : p * Math.PI * 2 * 2.5
 
-    const lx = lerp(-5.0, -0.72, e)
-    const rx = lerp(5.0, 0.72, e)
+    const lx = lerp(-4.5, -0.55, we)
+    const rx = lerp(4.5, 0.55, we)
     const y = bobUp - settle
-    if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = presentYaw }
-    if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -presentYaw }
+    if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = spin }
+    if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -spin }
     if (lBob.current) { lBob.current.position.y = y; lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock }
     if (rBob.current) { rBob.current.position.y = y; rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock }
 
@@ -272,7 +287,7 @@ function Scene({
           centre, darker edges) so the room has depth, not a flat brown panel. */}
       <pointLight position={[0, 1.7, -4.4]} intensity={5} color="#FFCF95" distance={7} decay={2} />
 
-      <Lounge reflective={reflective} />
+      <Lounge reflective={reflective} woodTex={woodTex} plasterTex={plasterTex} />
 
       <Pair url={ASSETS.cloudmonster} faceSign={1} outerRef={lOuter} bobRef={lBob} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} />
