@@ -296,8 +296,13 @@ function Scene({
         shadow-camera-near={1}
         shadow-camera-far={12}
       />
-      {/* Cool side fill — a 'window' raking from the left, separating the dark A.E.1. */}
-      <spotLight position={[-5, 3, 2]} target={spotTarget} angle={0.8} penumbra={1} intensity={4} distance={16} decay={2} color="#BFD0EE" />
+      {/* Cool side fill — a 'window' raking from the left, separating the dark pairs. */}
+      <spotLight position={[-5, 3, 2]} target={spotTarget} angle={0.8} penumbra={1} intensity={6} distance={16} decay={2} color="#BFD0EE" />
+      {/* Cool RIM/edge light from behind-above — catches the top-back edges of the dark
+          BLACK-RUNNER pair so it READS against the dark room (product-photography rim,
+          not a flat fill). No shadow (cheap); aimed DOWN at the pairs so it never flares
+          the camera even at the low front angle. */}
+      <spotLight position={[0, 2.8, -2.3]} target={spotTarget} angle={0.62} penumbra={1} intensity={30} distance={9} decay={2} color="#C8D4F0" />
       {/* Warm practical glow under the ceiling strip */}
       <pointLight position={[0, 3.5, -1.6]} intensity={3.5} color="#FFD9A6" distance={9} decay={2} />
       {/* Warm back-wall graze — a soft gradient on the back wall/mirror (kept low so
