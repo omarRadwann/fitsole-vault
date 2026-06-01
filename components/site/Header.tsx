@@ -66,6 +66,26 @@ export default function Header() {
           : 'bg-vault-black/95 border-b border-vault-gold/10'
       )}
     >
+      {/* Marketing announcement bar — a slim premium strip that markets FitSole site-
+          wide. Lives INSIDE the fixed header so it inherits the transparent→solid scroll
+          state and the finale fade for free; collapses (max-h-0) during "The Meeting" so
+          the cinematic frame stays full-bleed. */}
+      <div
+        className={cn(
+          'overflow-hidden transition-all duration-500 ease-out',
+          finaleActive ? 'max-h-0 opacity-0' : 'max-h-10 opacity-100',
+          scrolled && !finaleActive && 'border-b border-vault-gold/10'
+        )}
+        aria-hidden={finaleActive}
+      >
+        <p className="py-2 text-center text-[10px] sm:text-[11px] tracking-[0.28em] uppercase text-vault-gold/90">
+          Egypt&apos;s Sneaker Vault
+          <span className="mx-2.5 text-vault-gold/30">·</span>
+          <span className="text-vault-cream/70">100% Authenticated in Cairo</span>
+          <span className="mx-2.5 text-vault-gold/30 hidden sm:inline">·</span>
+          <span className="text-vault-cream/70 hidden sm:inline">Free Exchange &amp; Fast Delivery</span>
+        </p>
+      </div>
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo — fades over the finale (chrome), restores for the shop */}
