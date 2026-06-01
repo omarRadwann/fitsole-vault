@@ -12,6 +12,9 @@ export const ASSETS = {
   // Finale pairs — Tripo Smart-Mesh image-to-3D of the real ON Cloudmonster + Adidas
   // A.E. 1, optimized (webp 1024 + meshopt: ~5MB → ~270KB each). Used in SkyScene.
   cloudmonster: `${TRIPO}/cloudmonster_v01.optimized.glb`,
+  // User-uploaded black running shoe (8.5MB → 1.1MB optimized) — replaces the white
+  // ON in the finale (the white read too bright against the dark lounge).
+  blackRunner: `${TRIPO}/black_runner_v01.optimized.glb`,
   ae1: `${TRIPO}/ae1_v01.optimized.glb`,
 } as const
 

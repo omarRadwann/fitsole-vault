@@ -25,7 +25,7 @@ const leatherMat = new THREE.MeshStandardMaterial({ color: '#4A3322', roughness:
 // Brushed brass — mirror frame, baseboard, bench legs, accents (matches the vault).
 const brassMat = new THREE.MeshStandardMaterial({ color: '#C9A36A', roughness: 0.34, metalness: 0.9 })
 // Dark mirror glass for INTEGRATED (no live reflection — just a framed dark pane).
-const darkGlassMat = new THREE.MeshStandardMaterial({ color: '#0C0A08', roughness: 0.06, metalness: 0.85 })
+const darkGlassMat = new THREE.MeshStandardMaterial({ color: '#0E0B08', roughness: 0.04, metalness: 0.95 })
 // Warm emissive ceiling light strip (the practical that motivates the key light).
 const stripMat = new THREE.MeshStandardMaterial({ color: '#FFE7C6', emissive: '#FFE0B0', emissiveIntensity: 1.5, roughness: 1, metalness: 0 })
 
@@ -114,25 +114,31 @@ function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; wood
         <boxGeometry args={[3.6, 0.05, 0.16]} />
       </mesh>
 
-      {/* Leather try-on bench (centre-back) on slim brass legs */}
-      <RoundedBox args={[2.6, 0.34, 0.82]} radius={0.05} smoothness={3} position={[0, 0.5, -3.3]} material={leatherMat} castShadow receiveShadow />
-      <RoundedBox args={[2.64, 0.06, 0.86]} radius={0.02} smoothness={2} position={[0, 0.67, -3.3]} material={leatherMat} castShadow />
-      {[-1.18, 1.18].flatMap((lx) =>
-        [-0.32, 0.32].map((lz) => (
-          <mesh key={`${lx}_${lz}`} position={[lx, 0.16, -3.3 + lz]} material={brassMat} castShadow>
-            <cylinderGeometry args={[0.025, 0.025, 0.32, 12]} />
+      {/* Leather try-on SETTEE (centre-back) on slim brass legs — seat + low back +
+          arms. (A premium Tripo sofa GLB can drop straight in here later.) */}
+      <RoundedBox args={[2.4, 0.3, 0.82]} radius={0.09} smoothness={4} position={[0, 0.5, -3.22]} material={leatherMat} castShadow receiveShadow />
+      <RoundedBox args={[2.4, 0.64, 0.2]} radius={0.09} smoothness={4} position={[0, 0.82, -3.6]} material={leatherMat} castShadow />
+      <RoundedBox args={[0.22, 0.48, 0.88]} radius={0.08} smoothness={4} position={[-1.2, 0.62, -3.28]} material={leatherMat} castShadow />
+      <RoundedBox args={[0.22, 0.48, 0.88]} radius={0.08} smoothness={4} position={[1.2, 0.62, -3.28]} material={leatherMat} castShadow />
+      {[-1.05, 1.05].flatMap((lx) =>
+        [-0.3, 0.3].map((lz) => (
+          <mesh key={`${lx}_${lz}`} position={[lx, 0.17, -3.22 + lz]} material={brassMat} castShadow>
+            <cylinderGeometry args={[0.028, 0.022, 0.34, 12]} />
           </mesh>
         ))
       )}
 
-      {/* Full-length brass-framed mirror on the back wall, behind the bench — reflects
-          the pairs (live on discrete; a dark framed pane on integrated). */}
-      <group position={[0, 1.55, -5.9]}>
-        <RoundedBox args={[1.96, 3.04, 0.08]} radius={0.04} smoothness={3} material={brassMat} />
-        <mesh position={[0, 0, 0.05]} material={reflective ? undefined : darkGlassMat}>
-          <planeGeometry args={[1.7, 2.78]} />
+      {/* Full-length brass-framed mirror behind the settee — a premium beveled brass
+          frame; live reflection of the pairs on discrete, a glassy dark mirror that
+          catches the warm room + the light strip on integrated (reads as a real
+          mirror, not a flat panel). */}
+      <group position={[0, 1.55, -5.88]}>
+        <RoundedBox args={[2.02, 3.1, 0.1]} radius={0.05} smoothness={4} material={brassMat} castShadow />
+        <RoundedBox args={[1.82, 2.9, 0.12]} radius={0.03} smoothness={3} position={[0, 0, 0.02]} material={darkGlassMat} />
+        <mesh position={[0, 0, 0.085]} material={reflective ? undefined : darkGlassMat}>
+          <planeGeometry args={[1.72, 2.8]} />
           {reflective && (
-            <MeshReflectorMaterial resolution={256} blur={[0, 0]} mixBlur={0} mixStrength={1.2} depthScale={0} color="#0C0A08" metalness={0.6} roughness={0.16} mirror={0.85} />
+            <MeshReflectorMaterial resolution={256} blur={[0, 0]} mixBlur={0} mixStrength={1.3} depthScale={0} color="#0E0B08" metalness={0.7} roughness={0.12} mirror={0.9} />
           )}
         </mesh>
       </group>
@@ -273,7 +279,7 @@ function Scene({
         decay={2}
         color="#FFE3C2"
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={[512, 512]}
         shadow-bias={-0.0004}
         shadow-normalBias={0.04}
         shadow-camera-near={1}
@@ -289,7 +295,7 @@ function Scene({
 
       <Lounge reflective={reflective} woodTex={woodTex} plasterTex={plasterTex} />
 
-      <Pair url={ASSETS.cloudmonster} faceSign={1} outerRef={lOuter} bobRef={lBob} />
+      <Pair url={ASSETS.blackRunner} faceSign={1} outerRef={lOuter} bobRef={lBob} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} />
 
       {/* No post-composer: the Canvas is NOT `flat`, so R3F applies ACES tonemap + MSAA
