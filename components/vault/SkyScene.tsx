@@ -134,13 +134,14 @@ function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; wood
           space — bbox depth 0.1787 × scale 2.8 ≈ 0.5 along the y=0.5 normal (0.48,0,0.88),
           recessed to ~0.46 so it sits inside the frame — matching its yaw. Low 96-res:
           the 2nd (cheaper) reflection pass, on ALL GPUs so it always reads. */}
-      <mesh position={[-2.22, 1.5, -4.19]} rotation={[0, 0.5, 0]}>
+      <mesh position={[-2.23, 1.5, -4.21]} rotation={[0, 0.5, 0]}>
         <planeGeometry args={[0.62, 1.7]} />
-        {/* Live reflection — sits exactly on the glass (confirmed via a debug pass; it
-            had to be proud of the mirror's ~1m-deep body, not recessed). 96-res low pass:
-            the pairs + warm room reflect IN the mirror. This is the 2nd reflection pass —
-            the FIRST dial-back lever if the iGPU lags (swap to an env-glass material). */}
-        <MeshReflectorMaterial resolution={96} mirror={0.92} mixStrength={1} blur={[0, 0]} mixBlur={0} depthScale={0} roughness={0.06} metalness={0.5} color="#181109" />
+        {/* Mirror glass = env-reflective (reflects the warm IBL room) — NO 2nd render
+            pass, so it reads as a polished mirror at ZERO finale perf cost. (The live
+            96-res reflection was the meet-beat lag source AND the dark pairs barely
+            resolved in it — bad ROI.) Sits just proud of the GLB's ~1m-deep body so it
+            is not occluded; position confirmed earlier via a debug pass. */}
+        <meshStandardMaterial color="#100B07" metalness={1} roughness={0.1} envMapIntensity={1.5} />
       </mesh>
       {/* Olive tree (Tripo GLB) — back-right corner, a tall warm-vibes accent. */}
       <ModelOrFallback url={ASSETS.olive} scale={2.6} position={[3.0, 1.3, -4.8]} rotation={[0, -0.3, 0]} castShadow fallback={null} />

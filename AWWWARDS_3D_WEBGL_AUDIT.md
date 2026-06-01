@@ -411,21 +411,26 @@ verified on the SwiftShader / integrated-GPU path:
   around the meeting point (θ −19°→+23°, radius 4.6→3.3, height 0.52→0.72, always `lookAt` the pairs).
   Pure function of scroll → smooth under `frameloop="always"`; plays as a moving film shot riding the
   pairs' scroll-spin.
-- **Real reflections** — the floor is now `MeshReflectorMaterial` on **all GPUs** (128-res) so the
-  pairs reflect in the polished wood right under them (the headline reflection); a 96-res
-  `MeshReflectorMaterial` plane sits exactly on the mirror's glass (placed proud of the GLB's ~1m-deep
-  body — bbox-derived, confirmed via a debug-cyan pass) so the room + pairs reflect in the mirror.
-  **Perf note:** these are 2 extra scene-render passes/frame on the always-render iGPU finale — the
-  **first dial-back lever** if lag returns is the mirror pass (→ a no-pass env-glass material).
+- **Real reflections** — the **floor** is `MeshReflectorMaterial` on **all GPUs** (128-res) so the
+  pairs reflect in the polished wood right under them (the headline, real reflection). The **mirror**
+  uses a `metalness=1`/low-roughness **env-glass** plane (reflects the warm IBL room), placed proud of
+  the GLB's ~1m-deep body (bbox-derived, confirmed via a debug-cyan pass). NOTE: this began as a 2nd
+  live `MeshReflectorMaterial` pass, but on the user's "fix all" pass it was swapped to env-glass — the
+  dark pairs would read dim in a 96-res mirror AND it was a 2nd scene-render pass at the peak-load meet
+  beat, so env-glass reads as a polished mirror at **zero** extra render cost. Only the floor's 1
+  reflection pass remains — a live pairs-in-mirror reflection can be restored if the real-device FPS allows.
 - **Hero light + glow** — the warm KEY swells into a reveal at the meet (44 → ~72 at p≈0.5) and a
   screen-blended warm **CSS bloom** flares at the exact meeting then settles (compositor-cheap, no GPU
   post-pass) — a held cinematic "reveal".
 - **Richer atmosphere** — a taller/stronger volumetric god-ray cone + denser floating dust with two
   slow warm embers in the beam (all CSS/compositor → ~free).
 
-**Known cosmetic:** the A.E.1 GLB has a lime-green panel baked into its **albedo** (a Tripo-generation
-colorway) — moderating the key + env specular did NOT calm it (it is not specular blowout). Fixable
-only by retexturing the model; left as an optional follow-up.
+**A.E.1 recolor (done on the "fix all" pass):** the A.E.1 GLB had neon-lime panels baked into its
+**albedo** (a Tripo colorway, ~0.8% of the 1024² texture) — moderating the key + env specular did NOT
+calm it (not specular blowout). Fixed by retexturing: extract the embedded webp → HSV-shift only the
+saturated-green pixels to a deep warm olive/bronze → repack by appending the new image to the BIN and
+repointing the image bufferView (leaving the meshopt-compressed mesh untouched — verified 18,017 verts
+intact). Now reads premium under the warm key + ties to the brass/leather/olive palette.
 
-*Pending the user's real-device pass on: the un-freeze, the camera feel, the two reflections, and the
-lag (the reflections are the cost — dial-back lever noted above).*
+*Pending the user's real-device pass on: the screen un-freeze, the camera feel, and the lag — note the
+mirror's 2nd reflection pass was removed, so only the floor reflection's 1 pass now runs on the iGPU.*
