@@ -43,7 +43,6 @@ const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
 export default function SkyBridge() {
   const sectionRef = useRef<HTMLElement>(null)
   const scrollProgress = useRef(0) // 0..1, consumed by SkyScene's useFrame
-  const burstRef = useRef<HTMLDivElement>(null)
   const copyRef = useRef<HTMLDivElement>(null)
   const floodRef = useRef<HTMLDivElement>(null)
   const resolveRef = useRef<HTMLDivElement>(null)
@@ -66,7 +65,6 @@ export default function SkyBridge() {
   // old synth `ney`/`chime` cues were removed: they sounded cheap AND ducked the bed
   // −6 dB, so you heard the awful placeholder instead of the music.)
   useBedSection(!mobile && inView)
-  const armed = useRef(false)
   const rafId = useRef(0)
   const offset = useRef(0)
   const span = useRef(1)
@@ -149,18 +147,6 @@ export default function SkyBridge() {
         lastRenderedP.current = p
         invalidateRef.current?.()
       }
-      // A single soft gold ring draws outward once as the pairs meet, plus a quiet
-      // chime. The old fireworks (rays/sparks/flash/floorwave/auras/lens-flare) were
-      // cut for a restrained, expensive read. Re-arms on scroll-back.
-      if (!reduced && burstRef.current) {
-        if (p >= 0.48 && !armed.current) {
-          armed.current = true
-          burstRef.current.classList.add('burst')
-        } else if (p < 0.4 && armed.current) {
-          armed.current = false
-          burstRef.current.classList.remove('burst')
-        }
-      }
       // Charge — the centre gathers warm energy as the pairs close in (p .3→.48),
       // then eases off the instant the ring fires.
       if (chargeRef.current) {
@@ -209,15 +195,9 @@ export default function SkyBridge() {
           className="absolute inset-0 pointer-events-none"
           style={{
             backgroundImage:
-              // soft warm dusk glow up top — subtle, lets the Cairo-street backplate read through
-              'radial-gradient(ellipse 62% 60% at 50% 14%, rgba(255,224,180,0.1), transparent 60%),' +
-              // sink the FOREGROUND into shadow so the near 3D floor reads as pavement-in-
-              // shadow and its seam with the lit street disappears — the pairs sit in their
-              // pool of light above it. (Integrated GPUs can't reflect the street, so the
-              // bare floor would otherwise grazing-reflect the bright IBL as a grey band.)
-              'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.3) 12%, transparent 27%),' +
-              // gentle vignette to focus the frame on the pairs
-              'radial-gradient(ellipse 92% 94% at 50% 50%, transparent 58%, rgba(0,0,0,0.45) 100%)',
+              // Gentle cinematic vignette to focus the frame — the 3D fitting room is the
+              // real environment + light source now, so no void/backplate to mask.
+              'radial-gradient(ellipse 96% 96% at 50% 46%, transparent 62%, rgba(0,0,0,0.4) 100%)',
           }}
         />
 
@@ -263,12 +243,6 @@ export default function SkyBridge() {
           className="absolute inset-0 pointer-events-none z-[5]"
           style={{ opacity: 0, backgroundImage: 'radial-gradient(ellipse 28% 26% at 50% 60%, rgba(255,216,150,0.5), rgba(255,184,104,0.12) 46%, transparent 72%)' }}
         />
-
-        {/* A single soft gold ring draws outward once as the pairs meet — the whole
-            "impact" now. Gated to the one-shot .burst class (re-armed on scroll-back). */}
-        <div ref={burstRef} aria-hidden className="meet-burst absolute left-1/2 top-[60%] pointer-events-none z-[5]" style={{ width: 0, height: 0 }}>
-          <div className="ring absolute rounded-full border border-vault-gold/45" style={{ width: '200px', height: '200px', left: '-100px', top: '-100px' }} />
-        </div>
 
         {/* Copy + CTA (lands after the meeting, upper area) */}
         <div className="absolute inset-0 z-10 h-full flex flex-col items-center justify-start pt-[11vh] px-6 text-center pointer-events-none">
