@@ -16,6 +16,11 @@ export const ASSETS = {
   // ON in the finale (the white read too bright against the dark lounge).
   blackRunner: `${TRIPO}/black_runner_v01.optimized.glb`,
   ae1: `${TRIPO}/ae1_v01.optimized.glb`,
+  // Finale lounge furniture (user-uploaded, optimized): a real leather sofa + an
+  // ornate floor mirror — replace the procedural settee/mirror in SkyScene.
+  sofa: `${TRIPO}/sofa_v01.optimized.glb`,
+  mirror: `${TRIPO}/mirror_v01.optimized.glb`,
+  olive: `${TRIPO}/olive_v01.optimized.glb`,
 } as const
 
 // Lightweight sneakers displayed across the drop-wall shelves (cycled).

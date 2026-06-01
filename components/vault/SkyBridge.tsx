@@ -194,9 +194,10 @@ export default function SkyBridge() {
           className="absolute inset-0 pointer-events-none"
           style={{
             backgroundImage:
-              // Gentle cinematic vignette to focus the frame — the 3D fitting room is the
-              // real environment + light source now, so no void/backplate to mask.
-              'radial-gradient(ellipse 96% 96% at 50% 46%, transparent 62%, rgba(0,0,0,0.4) 100%)',
+              // A soft warm 'god-ray' cone spilling from the ceiling light over the pairs
+              // (good-vibes atmosphere) + a gentle vignette to focus the frame.
+              'radial-gradient(ellipse 24% 60% at 50% 0%, rgba(255,222,172,0.13), transparent 56%),' +
+              'radial-gradient(ellipse 96% 96% at 50% 46%, transparent 62%, rgba(0,0,0,0.42) 100%)',
           }}
         />
 

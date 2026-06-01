@@ -114,34 +114,25 @@ function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; wood
         <boxGeometry args={[3.6, 0.05, 0.16]} />
       </mesh>
 
-      {/* Leather try-on SETTEE (centre-back) on slim brass legs — seat + low back +
-          arms. (A premium Tripo sofa GLB can drop straight in here later.) */}
-      <RoundedBox args={[2.4, 0.3, 0.82]} radius={0.09} smoothness={4} position={[0, 0.5, -3.22]} material={leatherMat} castShadow receiveShadow />
-      <RoundedBox args={[2.4, 0.64, 0.2]} radius={0.09} smoothness={4} position={[0, 0.82, -3.6]} material={leatherMat} castShadow />
-      <RoundedBox args={[0.22, 0.48, 0.88]} radius={0.08} smoothness={4} position={[-1.2, 0.62, -3.28]} material={leatherMat} castShadow />
-      <RoundedBox args={[0.22, 0.48, 0.88]} radius={0.08} smoothness={4} position={[1.2, 0.62, -3.28]} material={leatherMat} castShadow />
-      {[-1.05, 1.05].flatMap((lx) =>
-        [-0.3, 0.3].map((lz) => (
-          <mesh key={`${lx}_${lz}`} position={[lx, 0.17, -3.22 + lz]} material={brassMat} castShadow>
-            <cylinderGeometry args={[0.028, 0.022, 0.34, 12]} />
-          </mesh>
-        ))
-      )}
+      {/* Real leather SOFA (Tripo GLB) centre-back — rotated 90° so the GLB's long axis
+          (Z) becomes the width; the pairs meet in front of it. */}
+      <ModelOrFallback
+        url={ASSETS.sofa}
+        scale={2.4}
+        position={[0, 0.65, -3.5]}
+        rotation={[0, Math.PI / 2, 0]}
+        castShadow
+        fallback={
+          <RoundedBox args={[2.3, 0.5, 0.9]} radius={0.08} smoothness={3} position={[0, 0.4, -3.5]} material={leatherMat} castShadow />
+        }
+      />
 
-      {/* Full-length brass-framed mirror behind the settee — a premium beveled brass
-          frame; live reflection of the pairs on discrete, a glassy dark mirror that
-          catches the warm room + the light strip on integrated (reads as a real
-          mirror, not a flat panel). */}
-      <group position={[0, 1.55, -5.88]}>
-        <RoundedBox args={[2.02, 3.1, 0.1]} radius={0.05} smoothness={4} material={brassMat} castShadow />
-        <RoundedBox args={[1.82, 2.9, 0.12]} radius={0.03} smoothness={3} position={[0, 0, 0.02]} material={darkGlassMat} />
-        <mesh position={[0, 0, 0.085]} material={reflective ? undefined : darkGlassMat}>
-          <planeGeometry args={[1.72, 2.8]} />
-          {reflective && (
-            <MeshReflectorMaterial resolution={256} blur={[0, 0]} mixBlur={0} mixStrength={1.3} depthScale={0} color="#0E0B08" metalness={0.7} roughness={0.12} mirror={0.9} />
-          )}
-        </mesh>
-      </group>
+      {/* Ornate floor mirror (Tripo GLB) — stood to the LEFT, angled toward centre, so
+          it reads BESIDE the sofa (it was lost dead-centre behind it) + its frame
+          catches the warm light. */}
+      <ModelOrFallback url={ASSETS.mirror} scale={2.8} position={[-2.5, 1.4, -4.7]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
+      {/* Olive tree (Tripo GLB) — back-right corner, a tall warm-vibes accent. */}
+      <ModelOrFallback url={ASSETS.olive} scale={2.6} position={[3.0, 1.3, -4.8]} rotation={[0, -0.3, 0]} castShadow fallback={null} />
     </group>
   )
 }
@@ -223,20 +214,27 @@ function Scene({
     // of scroll → smooth under always-render, holds its angle at rest.
     const we = smooth(clamp01(p / 0.3))
     const gait = reduced ? 0 : 1 - smooth(clamp01((p - 0.18) / 0.12))
-    const steps = clamp01(p / 0.3) * 4 * Math.PI * 2
-    const bobUp = Math.abs(Math.sin(steps)) * 0.03 * gait
-    const settle = reduced ? 0 : Math.exp(-(((p - 0.3) / 0.05) ** 2)) * 0.02
-    const rock = Math.sin(steps) * 0.05 * gait
-    const lean = (1 - smooth(clamp01((p - 0.2) / 0.12))) * 0.1 * (reduced ? 0 : 1)
+    const steps = clamp01(p / 0.3) * 5 * Math.PI * 2 // a touch more steps = a livelier stride
+    const bobUp = Math.abs(Math.sin(steps)) * 0.045 * gait // more bounce
+    const settle = reduced ? 0 : Math.exp(-(((p - 0.3) / 0.045) ** 2)) * 0.045 // plant compression on arrival
+    const rock = Math.sin(steps) * 0.07 * gait
+    const lean = (1 - smooth(clamp01((p - 0.2) / 0.12))) * 0.11 * (reduced ? 0 : 1)
     const spin = reduced ? 0 : p * Math.PI * 2 * 2.5
+    const tilt = reduced ? 0 : Math.sin(spin) * 0.04 // a subtle wobble as they spin — more physical
+    // Idle FLOAT — once arrived, the pairs gently breathe (clock-based; the canvas
+    // renders always, so they stay ALIVE even when scroll is paused). Out of phase.
+    const present = smooth(clamp01((Math.min(p, 0.86) - 0.32) / 0.4))
+    const t = state.clock.elapsedTime
+    const floatL = reduced ? 0 : Math.sin(t * 1.1) * 0.02 * present
+    const floatR = reduced ? 0 : Math.sin(t * 1.1 + 1.7) * 0.02 * present
 
     const lx = lerp(-4.5, -0.55, we)
     const rx = lerp(4.5, 0.55, we)
-    const y = bobUp - settle
+    const baseY = bobUp - settle
     if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = spin }
     if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -spin }
-    if (lBob.current) { lBob.current.position.y = y; lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock }
-    if (rBob.current) { rBob.current.position.y = y; rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock }
+    if (lBob.current) { lBob.current.position.y = baseY + floatL; lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt }
+    if (rBob.current) { rBob.current.position.y = baseY + floatR; rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt }
 
     // Warm key swells gently at the meeting, then settles for the presentation.
     if (keyRef.current) {
@@ -291,7 +289,7 @@ function Scene({
       <pointLight position={[0, 3.5, -1.6]} intensity={3.5} color="#FFD9A6" distance={9} decay={2} />
       {/* Warm back-wall graze — a soft gradient on the back wall/mirror (kept low so
           the room stays DARK + moody, matching the vault; the key pool is the focus). */}
-      <pointLight position={[0, 1.7, -4.4]} intensity={2.2} color="#FFCF95" distance={7} decay={2} />
+      <pointLight position={[0, 1.9, -4.2]} intensity={3.6} color="#FFCF95" distance={10} decay={2} />
 
       <Lounge reflective={reflective} woodTex={woodTex} plasterTex={plasterTex} />
 
