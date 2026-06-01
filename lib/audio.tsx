@@ -73,6 +73,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       // storage unavailable → fall back to the unmuted default
     }
     setMuted(initial)
+    audioEngine.initBed() // muted-autoplay the bed now → silent until the first interaction
     audioEngine.setMuted(initial)
     setHydrated(true)
   }, [])
@@ -89,7 +90,8 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     const opts: AddEventListenerOptions = { passive: true } // NOT once — re-arm until running
     const detach = () => events.forEach((e) => window.removeEventListener(e, onGesture))
     const onGesture = () => {
-      audioEngine.unlock()
+      audioEngine.unlock() // Web Audio wind/cues (Chrome needs a real click to resume)
+      audioEngine.unmute() // standalone bed → becomes audible even on a wheel/scroll
       // ctx.resume() is async — `running` is usually still false the instant after
       // unlock() even on a VALID gesture. Re-check on the next tick so a single
       // valid click/keypress detaches cleanly (don't depend on a 2nd gesture).
@@ -101,13 +103,12 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, [hydrated])
 
   const toggle = useCallback(() => {
-    audioEngine.unlock() // the click is a valid gesture — (re)start the context
+    audioEngine.unlock() // the click is a valid gesture — (re)start the Web Audio ctx
+    audioEngine.unmute() // a click is an interaction → the bed becomes audible
     setMuted((m) => {
-      // First click on a not-yet-running context = "turn sound ON", not a mute: the
-      // unmuted default is silent only because the browser blocks audio before a
-      // gesture (and scroll/wheel don't count as one). Once it's actually running,
-      // the icon toggles normally.
-      const next = audioEngine.running ? !m : false
+      // Plain toggle now: the bed muted-autoplays and unmutes on the first interaction,
+      // so the icon just flips mute on/off (no "first click turns it on" special case).
+      const next = !m
       try {
         localStorage.setItem(STORAGE_KEY, next ? '1' : '0')
       } catch {

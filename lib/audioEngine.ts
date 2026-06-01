@@ -27,9 +27,13 @@ class AudioEngine {
   private level = 0 // smoothed reactive energy
   private bedStarted = false
   private bedActive = false
-  private musicEl: HTMLAudioElement | null = null
-  private musicNode: MediaElementAudioSourceNode | null = null
-  private musicStarted = false
+  // The ambient music BED is a STANDALONE <audio> element (NOT routed through the
+  // AudioContext): muted-autoplay is allowed without a gesture, and we UNMUTE it on
+  // the first scroll/wheel/click. That's the ONLY way to get "music on scroll" — the
+  // Web Audio path needs ctx.resume(), which Chrome blocks until a real click (a
+  // wheel/scroll does NOT count). The velocity wind + cues still use Web Audio.
+  private bedEl: HTMLAudioElement | null = null
+  private hasInteracted = false
   muted = false
 
   // Master volume when unmuted. Intentionally restrained — ambient, not loud.
@@ -118,15 +122,10 @@ class AudioEngine {
     return this.level
   }
 
-  // ---- Music bed + scroll-motion air. Once unlocked (first gesture) the real
-  // royalty-free track loops CONTINUOUSLY while the vault is on-screen — no icon
-  // click needed. It routes through `bedGain` (ducks under cues, obeys mute), and
-  // the velocity "wind" rides on top straight to master. Both feed the analyser →
-  // the neon now breathes to the ACTUAL track.
+  // ---- Scroll-motion "air" (Web Audio). The music BED is now a standalone element
+  // (see initBed/unmute) so it can play on scroll without a click; this sets up only
+  // the velocity wind, which DOES need the unlocked context.
   private startBed(ctx: AudioContext) {
-    // Music bed — fetched + decoded async; the wind below still plays if it fails.
-    void this.startMusicBed(ctx)
-
     // (c) Velocity "wind" — brown noise → highpass → speed-controlled lowpass →
     // gain (opened by setMotion). Routed to master so it feeds the analyser too.
     const mNoise = this.brownNoise(ctx, 4)
@@ -148,36 +147,36 @@ class AudioEngine {
     this.motionFilter = mlp
   }
 
-  /** Load + loop the royalty-free music bed. Async (fetch + decode); on any failure
-   *  the bed stays silent and the velocity wind still plays. Routed through bedGain
-   *  so it ducks under cues + obeys mute. Skipped when the bed isn't active (mobile
-   *  static fallback) so phones don't fetch ~5MB for an experience they never hear. */
-  private startMusicBed(ctx: AudioContext) {
-    if (this.musicStarted || !this.bedGain || !this.bedActive) return
-    this.musicStarted = true
+  /** Start the bed as a MUTED-autoplay <audio> element (client-only; call on mount).
+   *  Muted autoplay is allowed without a gesture (and it STREAMS, so no ~60–100MB of
+   *  decoded PCM); unmute() makes it audible on the first interaction. Volume tracks
+   *  bedActive (only audible while a cinematic section is on screen). */
+  initBed() {
+    if (this.bedEl || typeof window === 'undefined') return
+    // Phones get the static fallback (no music) — don't fetch ~5MB they'll never hear.
+    if (window.matchMedia('(max-width: 640px) and (pointer: coarse)').matches) return
     try {
-      // STREAM the bed via an HTMLAudioElement (NOT decodeAudioData). decodeAudioData
-      // expands the ~5MB mp3 to ~60–100MB of PCM held for the WHOLE session; a media-
-      // element source streams it for ~no resident memory. The element is never added
-      // to the DOM — it routes through Web Audio (→ bedGain → master → analyser) so it
-      // still ducks under cues, obeys mute, and feeds the audio-reactive vault. Same-
-      // origin (withBase) → no crossOrigin/CORS needed. (Re-landed from the reverted
-      // 71fd0e4 — the safe RAM win, without that commit's ENTER-gate UX change.)
-      const el = new Audio()
-      el.src = withBase('/audio/vault-bed.mp3')
+      const el = new Audio(withBase('/audio/vault-bed.mp3'))
       el.loop = true
       el.preload = 'auto'
-      const node = ctx.createMediaElementSource(el)
-      const g = ctx.createGain()
-      g.gain.value = 0.85 // present background music, not foreground
-      node.connect(g)
-      g.connect(this.bedGain)
-      void el.play().catch(() => { this.musicStarted = false }) // retry on a later gesture
-      this.musicEl = el
-      this.musicNode = node
+      el.muted = true // muted autoplay → allowed pre-gesture; unmute() flips it
+      el.volume = this.bedActive ? 0.4 : 0
+      void el.play().catch(() => {}) // muted autoplay; unmute() retries play if blocked
+      this.bedEl = el
     } catch {
-      this.musicStarted = false // allow a retry on a later unlock / activation
+      /* no audio element available */
     }
+  }
+
+  /** Make the bed audible — called on the FIRST user interaction (incl. scroll/wheel).
+   *  Unmuting an ALREADY-PLAYING element is honored by Chrome even on a wheel event,
+   *  which is what delivers "music plays on scroll". No-op if the user muted. */
+  unmute() {
+    this.hasInteracted = true
+    if (!this.bedEl) return
+    const el = this.bedEl
+    if (el.paused) void el.play().catch(() => {}) // start (still muted) if autoplay was blocked
+    if (!this.muted) el.muted = false // then make it audible
   }
 
   private brownNoise(ctx: AudioContext, seconds: number) {
@@ -196,14 +195,14 @@ class AudioEngine {
     return src
   }
 
-  /** Raise/lower the ambient bed (e.g. only while the vault is on-screen). */
+  /** Raise/lower the ambient bed (only while a cinematic section is on screen). */
   setBedActive(active: boolean) {
     this.bedActive = active
+    // The standalone bed element: audible while a section is on screen, silent in the
+    // flat shop. (The Web Audio bedGain below now only matters for cue-ducking.)
+    if (this.bedEl) this.bedEl.volume = active ? 0.4 : 0
     const ctx = this.ctx
     if (!ctx || !this.bedGain) return
-    // If the bed activates after unlock (e.g. scrolling back to the vault from the
-    // shop), load the music now — it was skipped at unlock while the bed was idle.
-    if (active && !this.musicStarted) void this.startMusicBed(ctx)
     const t = ctx.currentTime
     this.bedGain.gain.cancelScheduledValues(t)
     this.bedGain.gain.setValueAtTime(this.bedGain.gain.value, t)
@@ -225,6 +224,9 @@ class AudioEngine {
 
   setMuted(m: boolean) {
     this.muted = m
+    // Standalone bed element: muted if the user muted OR they haven't interacted yet
+    // (the muted-autoplay state). unmute() clears the latter on the first interaction.
+    if (this.bedEl) this.bedEl.muted = m || !this.hasInteracted
     const ctx = this.ctx
     if (!ctx || !this.master) return
     const t = ctx.currentTime

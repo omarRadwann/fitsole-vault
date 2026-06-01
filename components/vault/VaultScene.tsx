@@ -366,18 +366,11 @@ function CashierVideo({ active, scrollProgress }: { active: boolean; scrollProgr
   useFrame(() => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid || !matRef.current) return
-    const p = scrollProgress.current
-    // Counter framed ~0.66–0.82. Start at 0.45 so it's fully WARM on arrival (the
-    // "screens took too long to come alive" fix — earlier pre-roll), end at 0.86 so
-    // it never pauses while still on screen. Concurrent decode stays ≤2: the Vault
-    // screen ends (0.68) as this ramps in, and Membership starts (0.68) as this
-    // tails out — the three never decode together. Affordable now that the device-
-    // tier fix put integrated GPUs on STANDARD@DPR1.0 (~70fps), giving the decoder
-    // the headroom whose absence used to stall requestVideoFrameCallback → "frozen".
-    // Drive play/pause off the REAL video state (vid.paused), not a manual ref, so a
-    // play() that rejects (decoder released after parking + reverse scroll) is
-    // retried next frame instead of latching frozen. Self-healing.
-    const shouldPlay = active && p > 0.45 && p < 0.86
+    // Loop continuously while the vault is on-screen (user: "all 3 screens should
+    // play in a loop since the entrance"). Paused when the vault parks off-screen
+    // (effect above) to release the decoder while shopping. Driven off the REAL
+    // vid.paused so a play() that rejects after a park→resume self-heals.
+    const shouldPlay = active
     if (shouldPlay) {
       if (vid.paused) vid.play().catch(() => {})
     } else if (!vid.paused) {
@@ -848,8 +841,10 @@ function DropWallBezel({ screen }: { screen?: boolean }) {
 }
 
 function VaultVideoScreen({
+  active,
   scrollProgress,
 }: {
+  active: boolean
   scrollProgress: React.MutableRefObject<number>
 }) {
   const tex = useVideoTexture(withBase('/video/fitsole-drop.mp4'), {
@@ -863,17 +858,18 @@ function VaultVideoScreen({
   const lastVT = useRef(0)
   const stall = useRef(0)
 
+  // Release the decoder when the vault parks off-screen (fires even with the loop
+  // frozen) so the storefront below isn't paying for idle H.264 streams.
+  useEffect(() => {
+    const vid = tex.image as HTMLVideoElement | undefined
+    if (vid && !active) vid.pause()
+  }, [active, tex])
+
   useFrame(() => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid) return
-    const p = scrollProgress.current
-    // The drop wall is framed ~0.58 and stays in view through ~0.66. Start the
-    // FIRST screen very early (0.20) so it's fully ALIVE on arrival — this is the
-    // "play the screens earlier, they took too long" fix; a muted decode is cheap
-    // and the GPU now has headroom (integrated → STANDARD@DPR1.0, ~70fps vs the old
-    // 1–2). End at 0.68, just after it leaves frame, so it never pauses while still
-    // on screen (a paused video = no requestVideoFrameCallback = frozen frame).
-    const shouldPlay = p > 0.2 && p < 0.68
+    // Loop from the entrance (user request) while the vault is on-screen.
+    const shouldPlay = active
     if (shouldPlay) {
       if (vid.paused) vid.play().catch(() => {})
     } else if (!vid.paused) {
@@ -926,9 +922,11 @@ function PosterScreen() {
 function DropFeature({
   scrollProgress,
   tier,
+  active,
 }: {
   scrollProgress: React.MutableRefObject<number>
   tier: QualityTier
+  active: boolean
 }) {
   // Yawed toward the centre aisle so the screen faces the glancing camera. Bezel
   // + poster always render; the video has its OWN boundary so a stalled / 503'd
@@ -957,7 +955,7 @@ function DropFeature({
           "before-cashier" screen animates on the Dell too. */}
       {(SCREEN_VIDEOS_ON_SAFE || tier !== 'safe') && (
         <Suspense fallback={null}>
-          <VaultVideoScreen scrollProgress={scrollProgress} />
+          <VaultVideoScreen active={active} scrollProgress={scrollProgress} />
         </Suspense>
       )}
     </group>
@@ -1076,14 +1074,11 @@ function MembershipFilm({ active, scrollProgress }: { active: boolean; scrollPro
   useFrame(() => {
     const vid = tex.image as HTMLVideoElement | undefined
     if (!vid) return
-    // Play the back-wall film from its APPROACH (p>0.68) through the finale, NOT from
-    // the entrance. The drop-wall (0.2–0.68) + cashier (0.45–0.86) already decode
-    // earlier; three heavy concurrent H.264 streams on the iGPU's fixed-function
-    // decoder is what dropped a screen to black under scroll-thrash. Gating this to
-    // its own beat restores the ≤2-concurrent budget the screens were tuned for
-    // (was always-on; the heavier Higgsfield ad clip made that overload). Driven off
-    // the REAL vid.paused so a play() that rejects on a park→resume self-heals.
-    const shouldPlay = active && scrollProgress.current > 0.68
+    // Loop from the entrance like the other two screens (user request). NOTE: up to
+    // 3 concurrent H.264 decodes on the iGPU — historically that could drop a screen
+    // to black under scroll-thrash; the poster fallback covers a stalled decode so it
+    // never goes black. Pauses when the vault parks off-screen (effect above).
+    const shouldPlay = active
     if (shouldPlay) {
       if (vid.paused) vid.play().catch(() => {})
     } else if (!vid.paused) {
@@ -1456,7 +1451,7 @@ export default function VaultScene({ scrollProgress, active, tier, reduced = fal
       </AssetErrorBoundary>
 
       {/* Drop-wall video display (the "New Drops" focal element) */}
-      <DropFeature scrollProgress={scrollProgress} tier={tier} />
+      <DropFeature scrollProgress={scrollProgress} tier={tier} active={active} />
 
       {/* Authenticity counter */}
       <AuthenticityCounter active={active} scrollProgress={scrollProgress} tier={tier} />

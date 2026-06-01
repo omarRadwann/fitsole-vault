@@ -161,9 +161,11 @@ function Scene({
     }
   }, [invalidate, invalidateRef])
 
-  // The whole scene is a PURE FUNCTION of scroll (walk, lean, present yaw, key
-  // swell, AND the end camera dive) → demand-mode holds the last frame at zero
-  // GPU cost when idle. No clock terms (they'd never tick on a held frame).
+  // The whole scene is a PURE FUNCTION of the (upstream-damped) scroll value. We
+  // render CONTINUOUSLY while in view (frameloop="always") so the motion is buttery
+  // every display frame — demand-mode only redrew on discrete scroll events, which
+  // read as steppy/"laggy" on a trackpad. The scene is lean enough (no post-composer,
+  // few lights, dpr 1) to hold 60fps; it still parks (frameloop "never") off-screen.
   useFrame(() => {
     const p = scrollProgress.current
 
@@ -291,8 +293,9 @@ function Scene({
 
 // Canvas wrapper (dynamic-imported by SkyBridge, ssr:false).
 // PERF (iGPU-first — 2nd WebGL canvas over the vault's):
-//   • frameloop="demand" + invalidate-on-scroll → renders ONLY while scrolling;
-//     a held frame costs ZERO GPU (the scene is a pure function of scroll).
+//   • frameloop="always" while in view → SMOOTH continuous motion every display
+//     frame (demand-mode redrew only on discrete scroll events → steppy/"laggy" on
+//     a trackpad). Parks "never" off-screen. The scene is lean enough to hold 60fps.
 //   • dpr pinned to 1.0 → no fill-rate blow-up on integrated GPUs.
 //   • Few real-time lights + baked IBL (free). Reflection is one cheap 128px FBO
 //     pass on discrete only. NO post-composer — native ACES tonemap + MSAA (cheaper
@@ -318,7 +321,7 @@ export default function SkyScene({
       // NOT `flat`: R3F applies ACES tonemapping + sRGB natively (in-shader, no extra
       // pass) and antialias:true gives hardware MSAA — premium color + clean edges
       // without a full-screen composer taxing every scroll frame on the Iris Xe.
-      frameloop={active ? 'demand' : 'never'}
+      frameloop={active ? 'always' : 'never'}
       dpr={1}
       camera={{ position: [0, 0.55, 3.9], fov: 38, near: 0.1, far: 40 }}
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
