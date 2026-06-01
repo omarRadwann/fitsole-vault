@@ -113,8 +113,15 @@ export default function VaultCanvas({ scrollProgress, active, reduced }: VaultCa
           alpha: false,
           powerPreference: 'high-performance',
         }}
-        // Shadows off on SAFE (set at boot for weak GPUs → no shadow pass at all).
-        shadows={tier === 'safe' ? false : 'soft'}
+        // Shadows off on SAFE *and* on every INTEGRATED GPU (Iris Xe etc). The
+        // HeroDisplay spot's 1536²/2048² shadow map is the single biggest per-frame
+        // cost on an iGPU — and once it drops FPS below the PerformanceMonitor's
+        // threshold, the tier flip-flops STANDARD↔SAFE, which remounts the screen
+        // videos → the "garbled screens on scroll" glitch. Gating shadows by
+        // `integrated` (like Bloom) keeps the FPS up so the tier stays put. The IBL +
+        // the glowing hero halo + the direct spot still ground the pair; the cast
+        // contact shadow is a fair trade for a stable, smooth iGPU frame.
+        shadows={tier === 'safe' || integrated ? false : 'soft'}
         style={{ background: '#0C0B0A' }}
         aria-hidden="true"
         onCreated={({ gl }) => {
