@@ -209,15 +209,15 @@ export default function SkyBridge() {
           className="absolute inset-0 pointer-events-none"
           style={{
             backgroundImage:
-              // narrow volumetric beam down the centre (the spotlight made visible)
-              'radial-gradient(ellipse 19% 64% at 50% -6%, rgba(255,217,151,0.16), transparent 66%),' +
-              // warm spotlight cone from above (champagne, not muddy amber)
-              'radial-gradient(ellipse 58% 82% at 50% 24%, rgba(255,224,180,0.16), transparent 60%),' +
-              // focused champagne pool at the shoes / floor (≈60% down) — lighter +
-              // cooler than the old amber, the strongest fix for the "brown haze"
-              'radial-gradient(ellipse 46% 28% at 50% 60%, rgba(255,210,150,0.12), transparent 64%),' +
-              // deep vignette — corners + bottom fall to black for the niche depth
-              'radial-gradient(ellipse 84% 86% at 50% 46%, transparent 42%, rgba(0,0,0,0.82) 100%)',
+              // soft warm dusk glow up top — subtle, lets the Cairo-street backplate read through
+              'radial-gradient(ellipse 62% 60% at 50% 14%, rgba(255,224,180,0.1), transparent 60%),' +
+              // sink the FOREGROUND into shadow so the near 3D floor reads as pavement-in-
+              // shadow and its seam with the lit street disappears — the pairs sit in their
+              // pool of light above it. (Integrated GPUs can't reflect the street, so the
+              // bare floor would otherwise grazing-reflect the bright IBL as a grey band.)
+              'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.3) 12%, transparent 27%),' +
+              // gentle vignette to focus the frame on the pairs
+              'radial-gradient(ellipse 92% 94% at 50% 50%, transparent 58%, rgba(0,0,0,0.45) 100%)',
           }}
         />
 

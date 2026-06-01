@@ -2,10 +2,11 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Environment, Lightformer, MeshReflectorMaterial, ContactShadows } from '@react-three/drei'
+import { Environment, Lightformer, MeshReflectorMaterial, ContactShadows, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
+import { withBase } from '@/lib/basePath'
 import { isIntegratedGpu, readGpuRenderer } from '@/lib/deviceTier'
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
@@ -13,11 +14,11 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const smooth = (x: number) => x * x * (3 - 2 * x)
 
 const fallbackMat = new THREE.MeshStandardMaterial({ color: '#3A352E', roughness: 0.5, metalness: 0.3 })
-// Glossy dark-marble floor for INTEGRATED GPUs (no live FBO reflection). Roughness/
-// metalness tuned so the warm IBL + the light-pool below read as polished stone,
-// not the dead-black void the old #0E0B08@0.22 collapsed to in capture. Discrete
-// GPUs get the live MeshReflectorMaterial reflection instead (see Scene).
-const staticFloorMat = new THREE.MeshStandardMaterial({ color: '#0B0806', roughness: 0.26, metalness: 0.88 })
+// Dark WET-ASPHALT floor for INTEGRATED GPUs (no live FBO reflection) — low albedo +
+// low metalness + glossy so it reads as the street's wet pavement (dark, with warm
+// specular highlights from the IBL/lights), continuous with the Cairo-street backplate
+// behind it (NOT a bright grey "shelf"). Discrete GPUs get the live reflection.
+const staticFloorMat = new THREE.MeshStandardMaterial({ color: '#060504', roughness: 0.8, metalness: 0.0 })
 
 // Warm champagne "pool of light" laid on the floor under the meeting point, so the
 // pairs read as standing IN a lit pool on a real floor — the single cheapest fix
@@ -40,26 +41,21 @@ function usePoolTexture() {
   }, [])
 }
 
-// Backdrop gradient on a far plane — a faint warm floor-glow rising into darkness
-// gives the void DEPTH (a sense of a back wall / horizon) without a literal skyline,
-// so the restrained-luxury "room" reads as a place. Within the fog range so it
-// blends to the background colour up top. Cheap (one 16×256 texture).
-function useBackdropTexture() {
-  return useMemo(() => {
-    const c = document.createElement('canvas')
-    c.width = 16
-    c.height = 256
-    const ctx = c.getContext('2d')!
-    const g = ctx.createLinearGradient(0, 256, 0, 0) // bottom → top
-    g.addColorStop(0, 'rgba(26,20,14,1)') // subtle warm floor-line lift (was a muddy brown band)
-    g.addColorStop(0.32, 'rgba(13,10,8,1)')
-    g.addColorStop(1, 'rgba(7,6,5,1)') // fades into the void up top
-    ctx.fillStyle = g
-    ctx.fillRect(0, 0, 16, 256)
-    const t = new THREE.CanvasTexture(c)
-    t.colorSpace = THREE.SRGBColorSpace
-    return t
-  }, [])
+// The PLACE — a cinematic Cairo street at golden-hour dusk (wet pavement, warm
+// shopfront/streetlamp bokeh, deep dusk sky) behind the pairs. A large UNLIT
+// billboard; the 3D reflective floor in front is the wet pavement the pairs stand on
+// + reflect in, and the warm fog blends the seam. Generated via Higgsfield Nano
+// Banana, optimized to ~100KB webp. Rendered in its OWN Suspense (in Scene) so a slow
+// texture load can never blank the whole scene.
+function StreetBackplate() {
+  const tex = useTexture(withBase('/images/finale-street.webp'))
+  tex.colorSpace = THREE.SRGBColorSpace
+  return (
+    <mesh position={[0, 3.2, -8]}>
+      <planeGeometry args={[22, 12.4]} />
+      <meshBasicMaterial map={tex} depthWrite={false} />
+    </mesh>
+  )
 }
 
 // Soft elliptical AO blob — the grounding on INTEGRATED GPUs (where real-time
@@ -146,8 +142,8 @@ function Scene({
   const rOuter = useRef<THREE.Group>(null)
   const rBob = useRef<THREE.Group>(null)
   const spotRef = useRef<THREE.SpotLight>(null)
+  const spotTarget = useMemo(() => new THREE.Object3D(), [])
   const poolTex = usePoolTexture()
-  const backdropTex = useBackdropTexture()
   const shadowTex = useShadowTexture()
   const { camera, invalidate } = useThree()
 
@@ -214,7 +210,9 @@ function Scene({
   return (
     <>
       <color attach="background" args={['#0A0807']} />
-      <fog attach="fog" args={['#0A0705', 5, 13]} />
+      {/* Fog pushed out + warmed so the Cairo-street backplate reads through it (was
+          5→13 for the old black void); a light haze still blends the floor→street seam. */}
+      <fog attach="fog" args={['#140D08', 9, 26]} />
 
       {/* Baked IBL — the scene's RICHNESS, free per-frame (frames=1 bakes once).
           Warm/brass-dominant key + warm front panel (lights the faces) + a stronger
@@ -236,41 +234,47 @@ function Scene({
           and a soft warm front fill for the camera-facing soles. ambient lifts the
           shadows just enough to keep the dark pair readable. */}
       <ambientLight intensity={0.3} color="#FFE2C2" />
-      <spotLight ref={spotRef} position={[0, 5.4, 1.4]} angle={0.62} penumbra={1} intensity={26} distance={16} decay={2} color="#FFE3C2" />
-      <spotLight position={[0, 4.2, -4]} angle={0.95} penumbra={1} intensity={11} distance={14} decay={2} color="#BFD2F2" />
-      <pointLight position={[0, 1.0, 3.2]} intensity={5} color="#FFE6C2" distance={7} decay={2} />
+      {/* Key aimed AT THE PAIRS (y~0.75), not the floor — a default-target spotlight
+          points at world origin (the floor), which washed the wet asphalt to grey. */}
+      <primitive object={spotTarget} position={[0, 0.75, 0]} />
+      <spotLight ref={spotRef} position={[0, 5.4, 1.4]} target={spotTarget} angle={0.5} penumbra={1} intensity={26} distance={16} decay={2} color="#FFE3C2" />
+      {/* Cool rim also AIMED at the pairs (not world-origin/floor) so it edges the dark
+          A.E.1 instead of washing the asphalt. */}
+      <spotLight position={[0, 4.2, -4]} target={spotTarget} angle={0.7} penumbra={1} intensity={11} distance={14} decay={2} color="#BFD2F2" />
+      {/* (Front-fill pointLight removed — it grazed the near floor into a grey band;
+          the warm IBL front panel lights the pairs' camera-facing side instead.) */}
 
-      {/* Backdrop — gives the void depth (a sense of a back wall rising out of the
-          floor) so the pairs meet somewhere, not in a flat black field. */}
-      <mesh position={[0, 2.4, -7]}>
-        <planeGeometry args={[30, 9]} />
-        <meshBasicMaterial map={backdropTex} toneMapped={false} depthWrite={false} />
-      </mesh>
+      {/* The PLACE — the Cairo-street backplate behind the pairs, in its own Suspense
+          so a slow texture load can't blank the scene. */}
+      <Suspense fallback={null}>
+        <StreetBackplate />
+      </Suspense>
 
-      {/* Glossy marble floor — live reflection on discrete GPUs, cheap static glossy
-          stone on integrated (the pool + contact shadows carry the grounding there). */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} material={reflective ? undefined : staticFloorMat} receiveShadow>
-        <circleGeometry args={[7, 64]} />
+      {/* Wet-asphalt street floor — extends back UNDER the backplate so it reads as
+          continuous pavement (kills the grey-ledge seam); live reflection of the pairs
+          on discrete GPUs, dark glossy static on integrated. The pairs stand + reflect. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -2]} material={reflective ? undefined : staticFloorMat} receiveShadow>
+        <circleGeometry args={[12, 64]} />
         {reflective && (
           <MeshReflectorMaterial
             resolution={128}
             blur={[0, 0]}
             mixBlur={0}
             depthScale={0}
-            mixStrength={2.0}
-            mirror={0.72}
-            color="#120D09"
-            metalness={0.7}
-            roughness={0.34}
+            mixStrength={1.4}
+            mirror={0.5}
+            color="#0A0908"
+            metalness={0.25}
+            roughness={0.45}
           />
         )}
       </mesh>
 
-      {/* Warm pool of light on the floor — the pairs stand IN it (kills the "floating
-          in a void" read). Additive so it only lifts the stone, never muddies it. */}
+      {/* Subtle warm streetlight pool under the pairs — a soft glow on the wet asphalt
+          (NOT the bright grey ledge it was); the street + reflection do the grounding. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0.15]}>
-        <planeGeometry args={[5.4, 3.2]} />
-        <meshBasicMaterial map={poolTex} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} opacity={0.95} />
+        <planeGeometry args={[5.0, 2.8]} />
+        <meshBasicMaterial map={poolTex} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} opacity={0.28} />
       </mesh>
 
       {/* Grounding, tier-aware: real shoe-shaped ContactShadows on discrete GPUs; on
