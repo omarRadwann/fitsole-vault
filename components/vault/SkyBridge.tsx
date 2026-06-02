@@ -225,9 +225,9 @@ export default function SkyBridge() {
               // A DEFINED cinematic spotlight shaft over the ring — a tight bright core beam
               // + a wide soft halo — plus a DEEPER vignette that sinks the studio into shadow
               // so the lit hero pairs pop (the premium 'arena spotlight' look). Compositor-cheap.
-              'radial-gradient(ellipse 15% 72% at 50% -6%, rgba(255,238,206,0.36), rgba(255,216,162,0.08) 38%, transparent 64%),' +
-              'radial-gradient(ellipse 44% 92% at 50% -2%, rgba(255,224,176,0.13), transparent 58%),' +
-              'radial-gradient(ellipse 100% 100% at 50% 44%, transparent 48%, rgba(0,0,0,0.64) 100%)',
+              'radial-gradient(ellipse 12% 82% at 50% -8%, rgba(255,240,212,0.46), rgba(255,214,160,0.1) 34%, transparent 60%),' +
+              'radial-gradient(ellipse 42% 94% at 50% -2%, rgba(255,222,172,0.15), transparent 56%),' +
+              'radial-gradient(ellipse 100% 100% at 50% 42%, transparent 44%, rgba(0,0,0,0.8) 100%)',
           }}
         />
 

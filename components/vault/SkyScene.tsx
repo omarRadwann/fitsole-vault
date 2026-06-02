@@ -49,7 +49,7 @@ function Pair({
         <Suspense fallback={null}>
           <ModelOrFallback
             url={url}
-            normalizeTo={0.54}
+            normalizeTo={0.38}
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
@@ -187,6 +187,9 @@ function Scene({
   const spotTarget = useMemo(() => new THREE.Object3D(), [])
   const shadowSeeded = useRef(false)
   const shadowTick = useRef(0)
+  // Spring-integrated spin state (real angular momentum — see useFrame).
+  const spinAngle = useRef(0)
+  const spinVel = useRef(0)
   const { invalidate } = useThree()
 
   // Render once on mount; invalidateRef kept for SkyBridge (harmless under "always").
@@ -198,9 +201,10 @@ function Scene({
     }
   }, [invalidate, invalidateRef])
 
-  // Pure function of the (upstream-damped) scroll value → smooth continuous motion
-  // under frameloop="always". No clock terms (except the idle breathe).
-  useFrame((state) => {
+  // Scroll drives the motion; a spring integrates the spin over real time so it carries
+  // angular momentum (physics) under frameloop="always".
+  useFrame((state, delta) => {
+    const dt = Math.min(delta, 0.05) // clamp for spring stability on slow frames
     // Shadow throttle: the STUDIO is static; only the pairs move. Manual shadow-map
     // control, refreshed every 2nd frame (only matters on discrete, where shadows run).
     if (!shadowSeeded.current) {
@@ -220,8 +224,8 @@ function Scene({
     const dive = smooth(clamp01((p - 0.86) / 0.14))
     const cx = 0, cy = 0.34, cz = -0.05 // orbit centre ≈ the ring / meeting point
     const theta = lerp(-0.34, 0.4, smooth(p)) // a left→right arc
-    const radius = lerp(3.5, 2.7, smooth(clamp01(p / 0.7))) - dive * 0.3 // close enough to hero the pairs, pulled back so they don't overflow the frame
-    const camH = lerp(0.4, 0.58, smooth(p)) // low heroic angle, rising a touch
+    const radius = lerp(3.9, 3.1, smooth(clamp01(p / 0.7))) - dive * 0.3 // pulled back so the SMALL pairs read as compact hero objects in a vast dark space (cinematic)
+    const camH = lerp(0.44, 0.6, smooth(p)) // low heroic angle, rising a touch
     camera.position.set(cx + Math.sin(theta) * radius, camH, cz + Math.cos(theta) * radius)
     camera.lookAt(cx, cy + dive * 0.05, cz)
 
@@ -235,12 +239,16 @@ function Scene({
     const settle = reduced ? 0 : Math.exp(-(((p - 0.3) / 0.045) ** 2)) * 0.03
     const rock = Math.sin(steps) * 0.07 * gait
     const lean = (1 - smooth(clamp01((p - 0.2) / 0.12))) * 0.11 * (reduced ? 0 : 1)
-    // PRESENTATION TURN (replaces the old dizzy 2.5-turn spin): ease from the walk-in into a 3/4
-    // hero by the meet (arrive), then a slow turntable DRIFT so the silhouette reads from gently
-    // changing angles. The counter-sign on the right pair mirrors the left → a symmetric reveal.
-    const arrive = smooth(clamp01((p - 0.05) / 0.42))
-    const drift = reduced ? 0 : smooth(clamp01((p - 0.45) / 0.5)) * 0.6
-    const turn = reduced ? 0 : arrive * 0.5 + drift
+    // FAST scroll-driven SPIN with real angular MOMENTUM: the target tracks scroll (scroll
+    // faster → it whips faster — ~3.6 turns across the finale), and a critically-ish-damped
+    // spring chases it so the pairs carry weight + overshoot/settle naturally rather than
+    // snapping rigidly to a scroll→angle map. THIS is the "better physics in movement".
+    const targetSpin = reduced ? 0 : p * Math.PI * 2 * 4.2
+    // Stiffer spring = responsive to scroll (tracks fast, little lag); slight underdamping →
+    // a touch of overshoot/settle so the spin carries weight (momentum) without feeling sluggish.
+    spinVel.current += ((targetSpin - spinAngle.current) * 16 - spinVel.current * 5) * dt
+    spinAngle.current += spinVel.current * dt
+    const turn = reduced ? 0 : spinAngle.current
     const tilt = reduced ? 0 : Math.sin(p * Math.PI * 4) * 0.02 // subtle heel-toe life
     // Idle FLOAT — once arrived, the pairs gently breathe (clock-based; always-render).
     const present = smooth(clamp01((Math.min(p, 0.86) - 0.32) / 0.4))
@@ -248,8 +256,8 @@ function Scene({
     const floatL = reduced ? 0 : Math.sin(t * 1.1) * 0.016 * present
     const floatR = reduced ? 0 : Math.sin(t * 1.1 + 1.7) * 0.016 * present
 
-    const lx = lerp(-4.5, -0.5, we)
-    const rx = lerp(4.5, 0.5, we)
+    const lx = lerp(-4.5, -0.45, we)
+    const rx = lerp(4.5, 0.45, we)
     // The pairs HOVER above the ring (a premium floating-product display): fully visible —
     // nothing hidden by the floor/ring — with a soft contact shadow cast below to ground the
     // levitation. The idle float adds a gentle breathe; the clamp keeps the hover positive.
@@ -304,7 +312,7 @@ function Scene({
         intensity={30}
         distance={15}
         decay={2}
-        color="#FFF3E6"
+        color="#FFE7C6"
         castShadow
         shadow-mapSize={[512, 512]}
         shadow-bias={-0.0004}
@@ -316,7 +324,7 @@ function Scene({
       <spotLight ref={key2Ref} position={[-2.1, 3.8, 1.0]} target={spotTarget} angle={0.46} penumbra={0.92} intensity={22} distance={15} decay={2} color="#E6EEFF" />
       {/* Cool rim from behind-above — separates the dark pairs from the dark studio. Boosted
           so the shoe silhouettes get a crisp premium edge-glow (esp. the darker olive runner). */}
-      <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={44} distance={9} decay={2} color="#C8D4F0" />
+      <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={48} distance={9} decay={2} color="#B4C6F4" />
       {/* Low cool back-rim at shoe height — rakes the heels so each pair reads as a lit hero
           object against the dark floor (product-photography edge separation). */}
       <pointLight position={[0, 0.5, -2.2]} intensity={9} color="#D6E2FF" distance={4} decay={2} />
@@ -346,7 +354,7 @@ function Scene({
           stage its drama. The plane sits just above the ring; the pairs hover ~0.11 above it, so
           this reads as a real floating-object shadow pooled beneath each shoe (not a blanket over
           the glow). Tight scale so it darkens only under the pairs; the outer ring keeps glowing. */}
-      <ContactShadows position={[0, 0.009, 0]} scale={4.5} resolution={512} blur={2.2} opacity={0.75} far={1.4} color="#000000" frames={Infinity} />
+      <ContactShadows position={[0, 0.009, 0]} scale={4.5} resolution={768} blur={2.0} opacity={0.84} far={1.4} color="#000000" frames={Infinity} />
 
       <Pair url={ASSETS.blackRunner} faceSign={1} outerRef={lOuter} bobRef={lBob} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} />
