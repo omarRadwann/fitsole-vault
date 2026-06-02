@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Environment, Lightformer, MeshReflectorMaterial, useGLTF } from '@react-three/drei'
+import { ContactShadows, Environment, Lightformer, MeshReflectorMaterial, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
@@ -49,7 +49,7 @@ function Pair({
         <Suspense fallback={null}>
           <ModelOrFallback
             url={url}
-            normalizeTo={0.66}
+            normalizeTo={0.54}
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
@@ -158,11 +158,12 @@ function TrainingStudio() {
         {/* MID-LEFT — the ball rack (holds its own balls; the loose red basketball was cut as a
             colour-clashing duplicate). */}
         <ModelOrFallback url={ASSETS.ballrack} scale={1.9} position={[-3.1, 1.0, -4.5]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
-        {/* BALANCED FORE-GROUND — bench fore-LEFT, countered by the gym bag + kettlebell
-            fore-RIGHT (the old left "kit corner" was overcrowded; this evens both sides). */}
-        <ModelOrFallback url={ASSETS.bench} scale={2.2} position={[-2.4, 0.46, -3.1]} rotation={[0, 0.9, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.gymbag} scale={0.7} position={[2.4, 0.28, -2.6]} rotation={[0, -0.6, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.kettlebell} scale={0.52} position={[1.8, 0.26, -1.4]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
+        {/* SYMMETRIC DEPTH around the ring — each side mirrors the other so the silhouettes frame
+            the floating hero pairs: bench (fore-LEFT) ↔ kettlebell (fore-RIGHT), ball rack
+            (mid-LEFT) ↔ gym bag (mid-RIGHT), lockers (back L+R), hoop (centre). */}
+        <ModelOrFallback url={ASSETS.bench} scale={2.2} position={[-2.55, 0.46, -3.0]} rotation={[0, 0.85, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.kettlebell} scale={0.52} position={[2.3, 0.26, -2.9]} rotation={[0, -0.5, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.gymbag} scale={0.7} position={[3.0, 0.28, -4.3]} rotation={[0, -0.7, 0]} castShadow fallback={null} />
       </Suspense>
     </group>
   )
@@ -242,18 +243,17 @@ function Scene({
     const floatL = reduced ? 0 : Math.sin(t * 1.1) * 0.016 * present
     const floatR = reduced ? 0 : Math.sin(t * 1.1 + 1.7) * 0.016 * present
 
-    const lx = lerp(-4.5, -0.58, we)
-    const rx = lerp(4.5, 0.58, we)
-    // Rest the soles a hair ABOVE the floor (+ the inlaid ring/pool discs) so the outsole is
-    // never cropped. The bob/settle/float used to dip the sole below y0 into the floor (and the
-    // ring at y0.006 / pool at y0.003 sit above y0), clipping the bottom of the shoe. The clamp
-    // guarantees the lowest point stays above the discs no matter what the animation does.
-    const SOLE_CLEAR = 0.018
-    const baseY = SOLE_CLEAR + bobUp - settle
+    const lx = lerp(-4.5, -0.5, we)
+    const rx = lerp(4.5, 0.5, we)
+    // The pairs HOVER above the ring (a premium floating-product display): fully visible —
+    // nothing hidden by the floor/ring — with a soft contact shadow cast below to ground the
+    // levitation. The idle float adds a gentle breathe; the clamp keeps the hover positive.
+    const FLOAT_H = 0.11
+    const baseY = FLOAT_H + bobUp - settle
     if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = spin }
     if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -spin }
-    if (lBob.current) { lBob.current.position.y = Math.max(0.011, baseY + floatL); lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt }
-    if (rBob.current) { rBob.current.position.y = Math.max(0.011, baseY + floatR); rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt }
+    if (lBob.current) { lBob.current.position.y = Math.max(0.085, baseY + floatL); lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt }
+    if (rBob.current) { rBob.current.position.y = Math.max(0.085, baseY + floatR); rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt }
 
     // ── THE MEET "REVEAL" ─────────────────────────────────────────────────────
     // At the meet (p≈0.5) the two performance spots SWELL and the gold ring + back-wall
@@ -269,23 +269,26 @@ function Scene({
   return (
     <>
       <color attach="background" args={['#08080B']} />
-      <fog attach="fog" args={['#08080B', 9, 26]} />
+      <fog attach="fog" args={['#070709', 7, 20]} />
 
       {/* Athletic IBL — a cool-white ceiling + front fill (performance-arena light) with a
           warm gold back accent (the brand). Baked once (frames=1), free per-frame. */}
       <Environment resolution={256} frames={1}>
-        <Lightformer intensity={1.0} color="#EAF0FF" position={[0, 5, 1]} rotation={[-Math.PI / 2, 0, 0]} scale={[11, 11, 1]} />
-        <Lightformer intensity={0.6} color="#DCE6FF" position={[0, 2, 5]} scale={[9, 5, 1]} />
-        <Lightformer intensity={0.5} color="#FFD79A" position={[0, 1.4, -5]} scale={[10, 3, 1]} />
-        <Lightformer intensity={0.4} color="#AFC4F0" position={[-5, 2.5, 0]} rotation={[0, Math.PI / 2, 0]} scale={[6, 5, 1]} />
-        <Lightformer intensity={0.4} color="#AFC4F0" position={[5, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]} scale={[6, 5, 1]} />
+        {/* IBL pulled WAY down — the scene must read DARK (lit only by the focused spots + the
+            ring), so the ambient image light barely fills. Just enough to keep materials from
+            going pure-black and to give the steel a faint cool sheen. */}
+        <Lightformer intensity={0.4} color="#EAF0FF" position={[0, 5, 1]} rotation={[-Math.PI / 2, 0, 0]} scale={[11, 11, 1]} />
+        <Lightformer intensity={0.22} color="#DCE6FF" position={[0, 2, 5]} scale={[9, 5, 1]} />
+        <Lightformer intensity={0.2} color="#FFD79A" position={[0, 1.4, -5]} scale={[10, 3, 1]} />
+        <Lightformer intensity={0.16} color="#AFC4F0" position={[-5, 2.5, 0]} rotation={[0, Math.PI / 2, 0]} scale={[6, 5, 1]} />
+        <Lightformer intensity={0.16} color="#AFC4F0" position={[5, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]} scale={[6, 5, 1]} />
       </Environment>
 
       {/* Bold PERFORMANCE LIGHTING — two converging spotlights stage the pairs on the ring
           (the cross-key look of a broadcast court), a cool rim separates them from the dark
           studio, and a warm gold up-glow rises from the ring. Dark studio + lit product =
           the hero. The two keys swell at the meet (driven above). */}
-      <ambientLight intensity={0.05} color="#C2CCDE" />
+      <ambientLight intensity={0.012} color="#C2CCDE" />
       <primitive object={spotTarget} position={[0, 0.4, 0]} />
       <spotLight
         ref={keyRef}
@@ -318,17 +321,21 @@ function Scene({
       {/* Warm FRONT fill from the camera side — lifts the shoes' faces so their form +
           detail read (not dark blobs); short range so it mostly touches the hero pairs. */}
       <pointLight position={[0, 0.85, 2.4]} intensity={13} color="#FFE8CC" distance={5} decay={2} />
-      {/* Cool back fill so the steel structure reads against the dark wall. */}
-      <pointLight position={[0, 2.6, -5.4]} intensity={5} color="#AFC0E4" distance={11} decay={2} />
-      {/* Soft cool ZONE fills — light the prop zones (left rack/bench, right podium/boxes)
-          so the FULL FACILITY reads; kept low so the central ring stays the hero. */}
-      <pointLight position={[-2.7, 2.2, -4.0]} intensity={9} color="#B8C6E8" distance={9} decay={2} />
-      <pointLight position={[2.7, 2.2, -4.0]} intensity={9} color="#B8C6E8" distance={9} decay={2} />
-      {/* Soft front fill on the LEFT kit corner (bench + bag + ball) so they read as real
-          kit instead of black blobs — gentle + short range, keeps the centre the hero. */}
-      <pointLight position={[-2.3, 1.3, -2.0]} intensity={7} color="#C6D2EC" distance={5} decay={2} />
+      {/* Cool back fill so the steel structure JUST reads against the dark wall (kept low — the
+          studio is meant to fall into shadow now). */}
+      <pointLight position={[0, 2.6, -5.4]} intensity={2.2} color="#AFC0E4" distance={11} decay={2} />
+      {/* Faint cool ZONE fills — the props read only as dim silhouettes framing the lit hero
+          (dropped hard: the dark room is the point; the spotlit ring + pairs are the subject). */}
+      <pointLight position={[-2.7, 2.2, -4.0]} intensity={3} color="#B8C6E8" distance={9} decay={2} />
+      <pointLight position={[2.7, 2.2, -4.0]} intensity={3} color="#B8C6E8" distance={9} decay={2} />
 
       <TrainingStudio />
+
+      {/* CONTACT SHADOW cast below the FLOATING pairs — grounds the levitation + gives the dark
+          stage its drama. The plane sits just above the ring; the pairs hover ~0.11 above it, so
+          this reads as a real floating-object shadow pooled beneath each shoe (not a blanket over
+          the glow). Tight scale so it darkens only under the pairs; the outer ring keeps glowing. */}
+      <ContactShadows position={[0, 0.009, 0]} scale={4.5} resolution={512} blur={2.2} opacity={0.75} far={1.4} color="#000000" frames={Infinity} />
 
       <Pair url={ASSETS.blackRunner} faceSign={1} outerRef={lOuter} bobRef={lBob} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} />
