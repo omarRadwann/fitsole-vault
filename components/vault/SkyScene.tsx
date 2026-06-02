@@ -78,7 +78,10 @@ function TrainingStudio() {
           (the showroom sheen) on every GPU; the live reflection grounds the pairs. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]} receiveShadow>
         <planeGeometry args={[26, 30]} />
-        <MeshReflectorMaterial resolution={128} blur={[110, 55]} mixBlur={1} mixStrength={0.92} depthScale={0.6} color="#1E1E24" metalness={0.72} roughness={0.28} />
+        {/* Dark POLISHED floor via a cheap standard material + the baked env (a faint glossy sheen),
+            NOT a live MeshReflectorMaterial mirror — that re-rendered the whole scene every frame
+            and was the lag. The contact shadow grounds the pairs; the env sheen keeps it premium. */}
+        <meshStandardMaterial color="#191920" metalness={0.62} roughness={0.32} envMapIntensity={0.55} />
       </mesh>
 
       {/* CENTRE PERFORMANCE RING — a glowing gold ring inlaid flush where the pairs meet:
@@ -325,28 +328,11 @@ function Scene({
       {/* Cool rim from behind-above — separates the dark pairs from the dark studio. Boosted
           so the shoe silhouettes get a crisp premium edge-glow (esp. the darker olive runner). */}
       <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={48} distance={9} decay={2} color="#B4C6F4" />
-      {/* Low cool back-rim at shoe height — rakes the heels so each pair reads as a lit hero
-          object against the dark floor (product-photography edge separation). */}
-      <pointLight position={[0, 0.5, -2.2]} intensity={9} color="#D6E2FF" distance={4} decay={2} />
-      {/* Warm gold up-glow rising from the performance ring — dramatic + ties to the ring
-          (toned WAY down: a strong up-glow made the shoes look brassy/plastic). */}
-      <pointLight position={[0, 0.18, 0]} intensity={2} color="#FFC878" distance={4} decay={2} />
-      {/* Warm FRONT fill from the camera side — lifts the shoes' faces so their form +
-          detail read (not dark blobs); short range so it mostly touches the hero pairs. */}
-      <pointLight position={[0, 0.85, 2.4]} intensity={13} color="#FFE8CC" distance={5} decay={2} />
-      {/* Cool back fill so the steel structure JUST reads against the dark wall (kept low — the
-          studio is meant to fall into shadow now). */}
-      <pointLight position={[0, 2.6, -5.4]} intensity={2.2} color="#AFC0E4" distance={11} decay={2} />
-      {/* Faint cool ZONE fills — barely lift the props off pure black (the dark room is the point). */}
-      <pointLight position={[-2.7, 2.2, -4.0]} intensity={1.6} color="#B8C6E8" distance={9} decay={2} />
-      <pointLight position={[2.7, 2.2, -4.0]} intensity={1.6} color="#B8C6E8" distance={9} decay={2} />
-      {/* Warm fill on the LEFT (olive) pair from the camera side so it reads as premium as the
-          brighter teal pair (the olive On runner is a darker material — it needs the extra lift). */}
-      <pointLight position={[-1.2, 0.6, 1.5]} intensity={7} color="#FFE2C2" distance={3.6} decay={2} />
-      {/* Cool RIM behind the prop clusters — rakes their back edges so the kit reads as crisp
-          intentional silhouettes against the dark wall (not murky blobs), room still dark. */}
-      <pointLight position={[-3.7, 2.5, -5.7]} intensity={6} color="#AEC0E8" distance={5.5} decay={2} />
-      <pointLight position={[3.7, 2.5, -5.7]} intensity={6} color="#AEC0E8" distance={5.5} decay={2} />
+      {/* LEAN cinematic light set (2 point lights) — every light shades every fragment, so on the
+          iGPU fewer lights = real FPS. ONE warm front fill (offset left to also lift the darker
+          olive pair) + ONE cool back fill that lifts the props/structure off black as silhouettes. */}
+      <pointLight position={[-0.5, 0.75, 1.9]} intensity={14} color="#FFE7CC" distance={5.5} decay={2} />
+      <pointLight position={[0, 3.0, -4.8]} intensity={4.5} color="#AEC0E8" distance={11} decay={2} />
 
       <TrainingStudio />
 
@@ -354,7 +340,7 @@ function Scene({
           stage its drama. The plane sits just above the ring; the pairs hover ~0.11 above it, so
           this reads as a real floating-object shadow pooled beneath each shoe (not a blanket over
           the glow). Tight scale so it darkens only under the pairs; the outer ring keeps glowing. */}
-      <ContactShadows position={[0, 0.009, 0]} scale={4.5} resolution={768} blur={2.0} opacity={0.84} far={1.4} color="#000000" frames={Infinity} />
+      <ContactShadows position={[0, 0.009, 0]} scale={3.6} resolution={384} blur={1.8} opacity={0.84} far={1.2} color="#000000" frames={Infinity} />
 
       <Pair url={ASSETS.blackRunner} faceSign={1} outerRef={lOuter} bobRef={lBob} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} />
