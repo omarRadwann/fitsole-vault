@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { ContactShadows, Environment, Lightformer, MeshReflectorMaterial } from '@react-three/drei'
+import { Environment, Lightformer, MeshReflectorMaterial, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
@@ -53,7 +53,7 @@ function Pair({
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
-            envMapIntensity={0.6}
+            envMapIntensity={0.75}
             fallback={
               <mesh material={fallbackMat} castShadow position={[0, 0.27, 0]}>
                 <boxGeometry args={[0.6, 0.27, 0.22]} />
@@ -78,16 +78,17 @@ function TrainingStudio() {
           (the showroom sheen) on every GPU; the live reflection grounds the pairs. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]} receiveShadow>
         <planeGeometry args={[26, 30]} />
-        <MeshReflectorMaterial resolution={128} blur={[150, 70]} mixBlur={1} mixStrength={0.7} depthScale={0.5} color="#222228" metalness={0.6} roughness={0.34} />
+        <MeshReflectorMaterial resolution={128} blur={[110, 55]} mixBlur={1} mixStrength={0.92} depthScale={0.6} color="#1E1E24" metalness={0.72} roughness={0.28} />
       </mesh>
 
       {/* CENTRE PERFORMANCE RING — a glowing gold ring inlaid flush where the pairs meet:
-          the focal "stage" + the WOW (ringMat's emissive is driven to ignite at the meet). */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} material={ringMat}>
+          the focal "stage" + the WOW (ringMat's emissive is driven to ignite at the meet).
+          Kept very low (y0.006) so it sits flush in the floor and never crops the soles. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0]} material={ringMat}>
         <ringGeometry args={[0.98, 1.16, 90]} />
       </mesh>
       {/* a soft warm pool inside the ring (a lit floor spot under the pairs) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0]} material={poolMat}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, 0]} material={poolMat}>
         <circleGeometry args={[0.98, 64]} />
       </mesh>
       {/* (Removed the two flanking "lane line" strips — they read as stray bright streaks
@@ -159,7 +160,7 @@ function TrainingStudio() {
         <ModelOrFallback url={ASSETS.ballrack} scale={1.9} position={[-3.1, 1.0, -4.5]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
         {/* BALANCED FORE-GROUND — bench fore-LEFT, countered by the gym bag + kettlebell
             fore-RIGHT (the old left "kit corner" was overcrowded; this evens both sides). */}
-        <ModelOrFallback url={ASSETS.bench} scale={2.2} position={[-2.7, 0.46, -3.0]} rotation={[0, 0.9, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.bench} scale={2.2} position={[-2.4, 0.46, -3.1]} rotation={[0, 0.9, 0]} castShadow fallback={null} />
         <ModelOrFallback url={ASSETS.gymbag} scale={0.7} position={[2.4, 0.28, -2.6]} rotation={[0, -0.6, 0]} castShadow fallback={null} />
         <ModelOrFallback url={ASSETS.kettlebell} scale={0.52} position={[1.8, 0.26, -1.4]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
       </Suspense>
@@ -243,19 +244,25 @@ function Scene({
 
     const lx = lerp(-4.5, -0.58, we)
     const rx = lerp(4.5, 0.58, we)
-    const baseY = bobUp - settle
+    // Rest the soles a hair ABOVE the floor (+ the inlaid ring/pool discs) so the outsole is
+    // never cropped. The bob/settle/float used to dip the sole below y0 into the floor (and the
+    // ring at y0.006 / pool at y0.003 sit above y0), clipping the bottom of the shoe. The clamp
+    // guarantees the lowest point stays above the discs no matter what the animation does.
+    const SOLE_CLEAR = 0.018
+    const baseY = SOLE_CLEAR + bobUp - settle
     if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = spin }
     if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -spin }
-    if (lBob.current) { lBob.current.position.y = baseY + floatL; lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt }
-    if (rBob.current) { rBob.current.position.y = baseY + floatR; rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt }
+    if (lBob.current) { lBob.current.position.y = Math.max(0.011, baseY + floatL); lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt }
+    if (rBob.current) { rBob.current.position.y = Math.max(0.011, baseY + floatR); rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt }
 
     // ── THE MEET "REVEAL" ─────────────────────────────────────────────────────
     // At the meet (p≈0.5) the two performance spots SWELL and the gold ring + back-wall
     // brand line IGNITE — the finale payoff. Then they settle for the present.
     const glow = Math.exp(-(((p - 0.5) / 0.15) ** 2))
-    // Softer keys (was 42+glow*46 / 30+glow*34) — the hard swell blew the shoes to plastic.
-    if (keyRef.current) keyRef.current.intensity = 34 + glow * 28
-    if (key2Ref.current) key2Ref.current.intensity = 24 + glow * 20
+    // Balanced keys — rich enough to hero the pairs (esp. the darker olive runner), softer than
+    // the old 42+glow*46 swell that blew them to plastic. The rim + fills carry the form.
+    if (keyRef.current) keyRef.current.intensity = 40 + glow * 30
+    if (key2Ref.current) key2Ref.current.intensity = 27 + glow * 22
     ringMat.emissiveIntensity = 1.9 + glow * 4.8
   })
 
@@ -299,14 +306,18 @@ function Scene({
       />
       {/* Cross-key — cool-white from the opposite side (the converging broadcast look). */}
       <spotLight ref={key2Ref} position={[-2.1, 3.8, 1.0]} target={spotTarget} angle={0.52} penumbra={0.9} intensity={22} distance={15} decay={2} color="#E6EEFF" />
-      {/* Cool rim from behind-above — separates the dark pairs from the dark studio. */}
-      <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={30} distance={9} decay={2} color="#C8D4F0" />
+      {/* Cool rim from behind-above — separates the dark pairs from the dark studio. Boosted
+          so the shoe silhouettes get a crisp premium edge-glow (esp. the darker olive runner). */}
+      <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={44} distance={9} decay={2} color="#C8D4F0" />
+      {/* Low cool back-rim at shoe height — rakes the heels so each pair reads as a lit hero
+          object against the dark floor (product-photography edge separation). */}
+      <pointLight position={[0, 0.5, -2.2]} intensity={9} color="#D6E2FF" distance={4} decay={2} />
       {/* Warm gold up-glow rising from the performance ring — dramatic + ties to the ring
           (toned WAY down: a strong up-glow made the shoes look brassy/plastic). */}
       <pointLight position={[0, 0.18, 0]} intensity={2} color="#FFC878" distance={4} decay={2} />
       {/* Warm FRONT fill from the camera side — lifts the shoes' faces so their form +
           detail read (not dark blobs); short range so it mostly touches the hero pairs. */}
-      <pointLight position={[0, 0.85, 2.4]} intensity={11} color="#FFE8CC" distance={5} decay={2} />
+      <pointLight position={[0, 0.85, 2.4]} intensity={13} color="#FFE8CC" distance={5} decay={2} />
       {/* Cool back fill so the steel structure reads against the dark wall. */}
       <pointLight position={[0, 2.6, -5.4]} intensity={5} color="#AFC0E4" distance={11} decay={2} />
       {/* Soft cool ZONE fills — light the prop zones (left rack/bench, right podium/boxes)
@@ -318,12 +329,6 @@ function Scene({
       <pointLight position={[-2.3, 1.3, -2.0]} intensity={7} color="#C6D2EC" distance={5} decay={2} />
 
       <TrainingStudio />
-
-      {/* CONTACT SHADOWS — ground the pairs + every prop on ALL GPUs. Per-light shadows are
-          gated OFF on integrated GPUs, so without this the shoes/props visually FLOAT (the
-          root "something's wrong"). One RT pass; plane sits just above the glowing ring
-          (y0.012) so the ring isn't itself shadowed. Dynamic (frames=Infinity) — pairs walk + bob. */}
-      <ContactShadows position={[0, 0.015, -1]} scale={14} resolution={512} blur={2.6} opacity={0.6} far={3} color="#000000" frames={Infinity} />
 
       <Pair url={ASSETS.blackRunner} faceSign={1} outerRef={lOuter} bobRef={lBob} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} />
@@ -377,3 +382,15 @@ export default function SkyScene({
     </Canvas>
   )
 }
+
+// Preload the finale GLBs the moment this module loads (page load — SkyBridge dynamic-imports
+// it up front), so scrolling into "The Meeting" doesn't hitch on model decode / GPU upload:
+// the pairs + props are downloaded + ready long before you arrive. (Same cache key as useGLTF.)
+useGLTF.preload(ASSETS.blackRunner)
+useGLTF.preload(ASSETS.ae1)
+useGLTF.preload(ASSETS.hoop)
+useGLTF.preload(ASSETS.lockers)
+useGLTF.preload(ASSETS.ballrack)
+useGLTF.preload(ASSETS.bench)
+useGLTF.preload(ASSETS.gymbag)
+useGLTF.preload(ASSETS.kettlebell)

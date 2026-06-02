@@ -38,6 +38,7 @@ const MOTES = [
   { x: 57, y: 61, s: 5, d: 28, delay: 13 },
 ]
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
+const smooth = (x: number) => x * x * (3 - 2 * x)
 
 // "The Meeting" — the finale, in real 3D. Two actual Tripo models of the ON
 // Cloudmonster + Adidas A.E. 1 STRIDE in across a glossy marble floor (driven by
@@ -112,17 +113,25 @@ export default function SkyBridge() {
   useEffect(() => {
     const el = sectionRef.current
     if (!el) return
-    const io = new IntersectionObserver(
-      ([e]) => {
-        setInView(e.isIntersecting)
-        // Fade the store header to full-bleed the cinematic frame (Header listens).
-        window.dispatchEvent(new CustomEvent('fitsole:finale', { detail: e.isIntersecting }))
-      },
+    // WARM-UP observer — activate the canvas ~one viewport EARLY (rootMargin), so the scene
+    // mounts, bakes its env, uploads the (preloaded) models + renders its first frames while
+    // still hidden behind the black entrance overlay. Scrolling in then reveals an already-warm,
+    // smooth scene instead of a decode/first-frame hitch (the "laggy entrance").
+    const warm = new IntersectionObserver(([e]) => setInView(e.isIntersecting), {
+      threshold: 0,
+      rootMargin: '100% 0px 100% 0px',
+    })
+    // HEADER observer — fade the store header to full-bleed the cinematic frame ONLY when the
+    // finale is actually on screen (kept on real intersection so the header doesn't vanish early).
+    const head = new IntersectionObserver(
+      ([e]) => window.dispatchEvent(new CustomEvent('fitsole:finale', { detail: e.isIntersecting })),
       { threshold: 0 }
     )
-    io.observe(el)
+    warm.observe(el)
+    head.observe(el)
     return () => {
-      io.disconnect()
+      warm.disconnect()
+      head.disconnect()
       window.dispatchEvent(new CustomEvent('fitsole:finale', { detail: false }))
     }
   }, [])
@@ -175,9 +184,10 @@ export default function SkyBridge() {
         const fout = p > 0.9 ? clamp01(1 - (p - 0.9) / 0.1) : 1
         copyRef.current.style.opacity = (fin * fout).toFixed(3)
       }
-      // ENTRANCE: the room fades UP from black over the first ~10% — a smooth reveal
-      // from the vault instead of a hard pop-in.
-      if (enterRef.current) enterRef.current.style.opacity = (1 - clamp01(p / 0.1)).toFixed(3)
+      // ENTRANCE: the room fades UP from black over the first ~12%, EASED (smoothstep) so the
+      // reveal glides instead of ramping linearly — a soft cinematic open from the vault. The
+      // canvas is already warm (rootMargin warm-up) so the reveal shows a smooth scene, not a hitch.
+      if (enterRef.current) enterRef.current.style.opacity = (1 - smooth(clamp01(p / 0.12))).toFixed(3)
       // EXIT: a clean fade to BLACK as the camera dives in (p .84→1), seamless into the
       // dark shop below. (The old warm-orange flood read as a flash + clashed with the
       // dark theme — removed.)
