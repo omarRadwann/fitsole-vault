@@ -225,9 +225,9 @@ function Scene({
     camera.position.set(cx + Math.sin(theta) * radius, camH, cz + Math.cos(theta) * radius)
     camera.lookAt(cx, cy + dive * 0.05, cz)
 
-    // ── THE WALK + SCROLL-DRIVEN SPIN ──────────────────────────────────────────
-    // The pairs roll in from the wings + arrive on the ring by ~p0.3, then a FULL
-    // scroll-driven rotation (scroll faster → spin faster; ~2.5 turns across the finale).
+    // ── THE WALK + PRESENTATION TURN ───────────────────────────────────────────
+    // The pairs roll in from the wings + arrive on the ring by ~p0.3, then ease into a
+    // flattering 3/4 hero angle by the meet and DRIFT slowly afterwards (a museum turntable).
     const we = smooth(clamp01(p / 0.3))
     const gait = reduced ? 0 : 1 - smooth(clamp01((p - 0.18) / 0.12))
     const steps = clamp01(p / 0.3) * 5 * Math.PI * 2
@@ -235,8 +235,13 @@ function Scene({
     const settle = reduced ? 0 : Math.exp(-(((p - 0.3) / 0.045) ** 2)) * 0.03
     const rock = Math.sin(steps) * 0.07 * gait
     const lean = (1 - smooth(clamp01((p - 0.2) / 0.12))) * 0.11 * (reduced ? 0 : 1)
-    const spin = reduced ? 0 : p * Math.PI * 2 * 2.5
-    const tilt = reduced ? 0 : Math.sin(spin) * 0.04
+    // PRESENTATION TURN (replaces the old dizzy 2.5-turn spin): ease from the walk-in into a 3/4
+    // hero by the meet (arrive), then a slow turntable DRIFT so the silhouette reads from gently
+    // changing angles. The counter-sign on the right pair mirrors the left → a symmetric reveal.
+    const arrive = smooth(clamp01((p - 0.05) / 0.42))
+    const drift = reduced ? 0 : smooth(clamp01((p - 0.45) / 0.5)) * 0.6
+    const turn = reduced ? 0 : arrive * 0.5 + drift
+    const tilt = reduced ? 0 : Math.sin(p * Math.PI * 4) * 0.02 // subtle heel-toe life
     // Idle FLOAT — once arrived, the pairs gently breathe (clock-based; always-render).
     const present = smooth(clamp01((Math.min(p, 0.86) - 0.32) / 0.4))
     const t = state.clock.elapsedTime
@@ -250,8 +255,8 @@ function Scene({
     // levitation. The idle float adds a gentle breathe; the clamp keeps the hover positive.
     const FLOAT_H = 0.11
     const baseY = FLOAT_H + bobUp - settle
-    if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = spin }
-    if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -spin }
+    if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = turn }
+    if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -turn }
     if (lBob.current) { lBob.current.position.y = Math.max(0.085, baseY + floatL); lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt }
     if (rBob.current) { rBob.current.position.y = Math.max(0.085, baseY + floatR); rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt }
 
