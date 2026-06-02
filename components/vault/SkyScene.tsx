@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Environment, Lightformer, MeshReflectorMaterial } from '@react-three/drei'
+import { ContactShadows, Environment, Lightformer, MeshReflectorMaterial } from '@react-three/drei'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
@@ -53,7 +53,7 @@ function Pair({
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
-            envMapIntensity={0.95}
+            envMapIntensity={0.6}
             fallback={
               <mesh material={fallbackMat} castShadow position={[0, 0.27, 0]}>
                 <boxGeometry args={[0.6, 0.27, 0.22]} />
@@ -90,12 +90,8 @@ function TrainingStudio() {
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0]} material={poolMat}>
         <circleGeometry args={[0.98, 64]} />
       </mesh>
-      {/* Two straight cool lane lines flanking the ring — a training-floor cue. */}
-      {[-2.4, 2.4].map((x, i) => (
-        <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.006, -0.5]} material={ledCoolMat}>
-          <planeGeometry args={[0.05, 7]} />
-        </mesh>
-      ))}
+      {/* (Removed the two flanking "lane line" strips — they read as stray bright streaks
+          on the floor rather than court markings. The ring + pool carry the stage now.) */}
 
       {/* Dark concrete enclosure — back + side walls + ceiling (recede into shadow). */}
       <mesh position={[0, 2.8, -6.6]} receiveShadow material={wallConcreteMat}>
@@ -133,6 +129,12 @@ function TrainingStudio() {
         <boxGeometry args={[15, 0.05, 0.04]} />
       </mesh>
 
+      {/* Steel mount arm behind the backboard → the hoop reads WALL-MOUNTED, not a floating
+          decal. Spans from the board back (~z-6.2) to the wall (z-6.6). y tuned by capture. */}
+      <mesh position={[0, 3.5, -6.42]} material={steelMat}>
+        <boxGeometry args={[0.18, 0.18, 0.46]} />
+      </mesh>
+
       {/* Steel spotlight housings on the ceiling over the platform (motivate the keys). */}
       {[-1.4, 1.4].map((x, i) => (
         <mesh key={i} position={[x, 5.1, 0.2]} material={steelMat}>
@@ -148,20 +150,18 @@ function TrainingStudio() {
       <Suspense fallback={null}>
         {/* BACKDROP — hoop centred high on the back wall (the facility's centrepiece). */}
         <ModelOrFallback url={ASSETS.hoop} scale={2.6} position={[0, 3.05, -6.2]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        {/* BACK WALL — lockers (left) BALANCED by stacked shoeboxes (right). */}
+        {/* BACK WALL — a SYMMETRIC locker room flanking the hoop (lockers L + R). Replaces the
+            old "foam-block" shoeboxes on the right with a matching, better-reading prop. */}
         <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[-3.5, 1.05, -6.1]} rotation={[0, 0.4, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.shoeboxes} scale={1.05} position={[3.4, 0.52, -6.0]} rotation={[0, -0.5, 0]} castShadow fallback={null} />
-        {/* MID GROUND — ball rack (left). (The podium + featured shoe lived at x3,z-4.5 but the
-            camera orbit never frames that spot, so they were cut as unseen draw-call dead weight.) */}
+        <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[3.5, 1.05, -6.1]} rotation={[0, -0.4, 0]} castShadow fallback={null} />
+        {/* MID-LEFT — the ball rack (holds its own balls; the loose red basketball was cut as a
+            colour-clashing duplicate). */}
         <ModelOrFallback url={ASSETS.ballrack} scale={1.9} position={[-3.1, 1.0, -4.5]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
-        {/* FORE-LEFT — the bench (angled inward) + the gym bag on the FLOOR beside it (not on it). */}
+        {/* BALANCED FORE-GROUND — bench fore-LEFT, countered by the gym bag + kettlebell
+            fore-RIGHT (the old left "kit corner" was overcrowded; this evens both sides). */}
         <ModelOrFallback url={ASSETS.bench} scale={2.2} position={[-2.7, 0.46, -3.0]} rotation={[0, 0.9, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.gymbag} scale={0.7} position={[-1.85, 0.28, -2.2]} rotation={[0, 0.6, 0]} castShadow fallback={null} />
-        {/* THE LEFT KIT CORNER — a loose basketball tucked beside the bench (a small detail,
-            NOT a bright foreground hero — kept back + small so it nods to sport without
-            stealing the eye from the pairs). The kettlebell flanks the ring on the right. */}
-        <ModelOrFallback url={ASSETS.basketball} scale={0.3} position={[-2.45, 0.15, -1.1]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.kettlebell} scale={0.52} position={[1.9, 0.26, -1.5]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.gymbag} scale={0.7} position={[2.4, 0.28, -2.6]} rotation={[0, -0.6, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.kettlebell} scale={0.52} position={[1.8, 0.26, -1.4]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
       </Suspense>
     </group>
   )
@@ -253,8 +253,9 @@ function Scene({
     // At the meet (p≈0.5) the two performance spots SWELL and the gold ring + back-wall
     // brand line IGNITE — the finale payoff. Then they settle for the present.
     const glow = Math.exp(-(((p - 0.5) / 0.15) ** 2))
-    if (keyRef.current) keyRef.current.intensity = 42 + glow * 46
-    if (key2Ref.current) key2Ref.current.intensity = 30 + glow * 34
+    // Softer keys (was 42+glow*46 / 30+glow*34) — the hard swell blew the shoes to plastic.
+    if (keyRef.current) keyRef.current.intensity = 34 + glow * 28
+    if (key2Ref.current) key2Ref.current.intensity = 24 + glow * 20
     ringMat.emissiveIntensity = 1.9 + glow * 4.8
   })
 
@@ -301,8 +302,8 @@ function Scene({
       {/* Cool rim from behind-above — separates the dark pairs from the dark studio. */}
       <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={30} distance={9} decay={2} color="#C8D4F0" />
       {/* Warm gold up-glow rising from the performance ring — dramatic + ties to the ring
-          (toned down: too strong under-lit the shoes unflatteringly). */}
-      <pointLight position={[0, 0.18, 0]} intensity={4} color="#FFC878" distance={4} decay={2} />
+          (toned WAY down: a strong up-glow made the shoes look brassy/plastic). */}
+      <pointLight position={[0, 0.18, 0]} intensity={2} color="#FFC878" distance={4} decay={2} />
       {/* Warm FRONT fill from the camera side — lifts the shoes' faces so their form +
           detail read (not dark blobs); short range so it mostly touches the hero pairs. */}
       <pointLight position={[0, 0.85, 2.4]} intensity={11} color="#FFE8CC" distance={5} decay={2} />
@@ -317,6 +318,12 @@ function Scene({
       <pointLight position={[-2.3, 1.3, -2.0]} intensity={7} color="#C6D2EC" distance={5} decay={2} />
 
       <TrainingStudio />
+
+      {/* CONTACT SHADOWS — ground the pairs + every prop on ALL GPUs. Per-light shadows are
+          gated OFF on integrated GPUs, so without this the shoes/props visually FLOAT (the
+          root "something's wrong"). One RT pass; plane sits just above the glowing ring
+          (y0.012) so the ring isn't itself shadowed. Dynamic (frames=Infinity) — pairs walk + bob. */}
+      <ContactShadows position={[0, 0.015, -1]} scale={14} resolution={512} blur={2.6} opacity={0.6} far={3} color="#000000" frames={Infinity} />
 
       <Pair url={ASSETS.blackRunner} faceSign={1} outerRef={lOuter} bobRef={lBob} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} />
