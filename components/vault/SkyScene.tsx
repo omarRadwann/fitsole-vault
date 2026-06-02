@@ -2,10 +2,15 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { ContactShadows, Environment, Lightformer, MeshReflectorMaterial, useGLTF } from '@react-three/drei'
+import { Environment, Lightformer, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
+import Basketball, { RIM, blobTexture, type BallControl } from './Basketball'
+
+// Flip to true (or wire to ?debugRim) to show a wireframe torus at the swish RIM circle while
+// calibrating the moved hoop, then set back to false.
+const DEBUG_RIM = false
 import { isIntegratedGpu, readGpuRenderer } from '@/lib/deviceTier'
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
@@ -49,7 +54,7 @@ function Pair({
         <Suspense fallback={null}>
           <ModelOrFallback
             url={url}
-            normalizeTo={0.38}
+            normalizeTo={0.30}
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
@@ -62,6 +67,12 @@ function Pair({
           />
         </Suspense>
       </group>
+      {/* Soft drop shadow under the pair — a cheap textured blob. As a child of the OUTER group it
+          follows the walk-in x + the spin automatically, and stays on the floor while the bob floats. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} scale={[0.34, 0.17, 1]} renderOrder={2}>
+        <circleGeometry args={[1, 24]} />
+        <meshBasicMaterial map={blobTexture()} transparent opacity={0.5} depthWrite={false} />
+      </mesh>
     </group>
   )
 }
@@ -133,10 +144,10 @@ function TrainingStudio() {
         <boxGeometry args={[15, 0.05, 0.04]} />
       </mesh>
 
-      {/* Steel mount arm behind the backboard → the hoop reads WALL-MOUNTED, not a floating
-          decal. Spans from the board back (~z-6.2) to the wall (z-6.6). y tuned by capture. */}
-      <mesh position={[0, 3.5, -6.42]} material={steelMat}>
-        <boxGeometry args={[0.18, 0.18, 0.46]} />
+      {/* Steel mount arm behind the (moved-forward) backboard → reads WALL-MOUNTED. Now spans
+          from the board back (~z-5.4) to the wall (z-6.6). y tuned by capture. */}
+      <mesh position={[0, 2.95, -6.0]} material={steelMat}>
+        <boxGeometry args={[0.16, 0.16, 1.2]} />
       </mesh>
 
       {/* Steel spotlight housings on the ceiling over the platform (motivate the keys). */}
@@ -152,12 +163,13 @@ function TrainingStudio() {
           estimates, tuned by capture; the furniture GLBs use `scale` (their bbox doesn't
           resolve for normalizeTo). castShadow → only renders on discrete (shadows gated). ── */}
       <Suspense fallback={null}>
-        {/* BACKDROP — hoop centred high on the back wall (the facility's centrepiece). */}
-        <ModelOrFallback url={ASSETS.hoop} scale={2.6} position={[0, 3.05, -6.2]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        {/* BACK WALL — a SYMMETRIC locker room flanking the hoop (lockers L + R). Replaces the
-            old "foam-block" shoeboxes on the right with a matching, better-reading prop. */}
-        <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[-3.5, 1.05, -6.1]} rotation={[0, 0.4, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[3.5, 1.05, -6.1]} rotation={[0, -0.4, 0]} castShadow fallback={null} />
+        {/* BACKDROP — hoop brought FORWARD + lower so the rim is reachable for the ball game
+            (was [0,3.05,-6.2] s2.6). Rim circle calibrated via RIM/DEBUG_RIM in Basketball.tsx. */}
+        <ModelOrFallback url={ASSETS.hoop} scale={2.2} position={[0, 2.7, -5.4]} rotation={[0, 0, 0]} castShadow fallback={null} />
+        {/* BACK WALL — a SYMMETRIC locker room flanking the hoop, doors FACING THE VIEWER (+z).
+            (If the GLB faces away on first capture, switch these rotations to [0, Math.PI, 0].) */}
+        <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[-3.5, 1.05, -6.1]} rotation={[0, 0, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[3.5, 1.05, -6.1]} rotation={[0, 0, 0]} castShadow fallback={null} />
         {/* MID-LEFT — the ball rack (holds its own balls; the loose red basketball was cut as a
             colour-clashing duplicate). */}
         <ModelOrFallback url={ASSETS.ballrack} scale={1.9} position={[-3.1, 1.0, -4.5]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
@@ -176,10 +188,14 @@ function Scene({
   scrollProgress,
   reduced,
   invalidateRef,
+  ballControlRef,
+  onScore,
 }: {
   scrollProgress: React.MutableRefObject<number>
   reduced: boolean
   invalidateRef: React.MutableRefObject<(() => void) | null>
+  ballControlRef?: React.MutableRefObject<BallControl | null>
+  onScore?: () => void
 }) {
   const lOuter = useRef<THREE.Group>(null)
   const lBob = useRef<THREE.Group>(null)
@@ -193,6 +209,7 @@ function Scene({
   // Spring-integrated spin state (real angular momentum — see useFrame).
   const spinAngle = useRef(0)
   const spinVel = useRef(0)
+  const shockRef = useRef<THREE.Mesh>(null) // gold meet shockwave ring
   const { invalidate } = useThree()
 
   // Render once on mount; invalidateRef kept for SkyBridge (harmless under "always").
@@ -221,6 +238,9 @@ function Scene({
 
     const p = scrollProgress.current
     const camera = state.camera
+    // MEET energy — a wide swell (lights/ring) + a tight spike (leap/whip/shockwave/flash).
+    const glow = Math.exp(-(((p - 0.5) / 0.15) ** 2))
+    const burst = reduced ? 0 : Math.exp(-(((p - 0.5) / 0.05) ** 2))
 
     // ── CINEMATIC CAMERA — a slow ORBIT + push-in around the performance ring, so the
     // finale plays like a moving broadcast shot. Pure function of scroll.
@@ -246,7 +266,7 @@ function Scene({
     // faster → it whips faster — ~3.6 turns across the finale), and a critically-ish-damped
     // spring chases it so the pairs carry weight + overshoot/settle naturally rather than
     // snapping rigidly to a scroll→angle map. THIS is the "better physics in movement".
-    const targetSpin = reduced ? 0 : p * Math.PI * 2 * 4.2
+    const targetSpin = (reduced ? 0 : p * Math.PI * 2 * 4.2) + burst * Math.PI * 0.8 // +whip at the meet
     // Stiffer spring = responsive to scroll (tracks fast, little lag); slight underdamping →
     // a touch of overshoot/settle so the spin carries weight (momentum) without feeling sluggish.
     spinVel.current += ((targetSpin - spinAngle.current) * 16 - spinVel.current * 5) * dt
@@ -263,23 +283,39 @@ function Scene({
     const rx = lerp(4.5, 0.45, we)
     // The pairs HOVER above the ring (a premium floating-product display): fully visible —
     // nothing hidden by the floor/ring — with a soft contact shadow cast below to ground the
-    // levitation. The idle float adds a gentle breathe; the clamp keeps the hover positive.
+    // levitation. LIFE during the spin: a bob synced to the spin phase, a slight X tumble, a
+    // gentle scale "breath" — plus a LEAP at the meet (burst). All tiny → premium, not chaotic.
     const FLOAT_H = 0.11
     const baseY = FLOAT_H + bobUp - settle
+    const leap = burst * 0.1
+    const spinLifeL = reduced ? 0 : Math.sin(spinAngle.current) * 0.012 * present
+    const spinLifeR = reduced ? 0 : Math.sin(spinAngle.current + 1.7) * 0.012 * present
+    const tumble = reduced ? 0 : Math.sin(spinAngle.current * 0.5) * 0.04 * present
+    const breathL = reduced ? 1 : 1 + Math.sin(t * 1.3) * 0.012 * present
+    const breathR = reduced ? 1 : 1 + Math.sin(t * 1.3 + 1.7) * 0.012 * present
     if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = turn }
     if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -turn }
-    if (lBob.current) { lBob.current.position.y = Math.max(0.085, baseY + floatL); lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt }
-    if (rBob.current) { rBob.current.position.y = Math.max(0.085, baseY + floatR); rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt }
+    if (lBob.current) { lBob.current.position.y = Math.max(0.07, baseY + floatL + leap + spinLifeL); lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt + tumble; lBob.current.scale.setScalar(breathL) }
+    if (rBob.current) { rBob.current.position.y = Math.max(0.07, baseY + floatR + leap + spinLifeR); rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt - tumble; rBob.current.scale.setScalar(breathR) }
 
     // ── THE MEET "REVEAL" ─────────────────────────────────────────────────────
-    // At the meet (p≈0.5) the two performance spots SWELL and the gold ring + back-wall
-    // brand line IGNITE — the finale payoff. Then they settle for the present.
-    const glow = Math.exp(-(((p - 0.5) / 0.15) ** 2))
-    // Tighter dramatic keys — they pool on the pairs (the room is dark). key2 (the LEFT cross-key)
+    // At the meet (p≈0.5) the two performance spots SWELL and the gold ring IGNITES hard
+    // (burst), a gold SHOCKWAVE rings outward, the pairs leap + whip — the finale payoff.
+    // Tighter dramatic keys — they pool on the pairs (the room is dark). key2 (LEFT cross-key)
     // is boosted extra so the darker olive runner reads as premium as the brighter teal pair.
     if (keyRef.current) keyRef.current.intensity = 44 + glow * 32
     if (key2Ref.current) key2Ref.current.intensity = 36 + glow * 26
-    ringMat.emissiveIntensity = 1.9 + glow * 4.8
+    ringMat.emissiveIntensity = 1.9 + glow * 4.8 + burst * 6
+    // Gold SHOCKWAVE — a flat ring bursts outward across the floor at the meet. Pure function of
+    // p (deterministic → replays cleanly on scroll back/forth); near-zero cost (1 draw, ~6% of scroll).
+    if (shockRef.current) {
+      shockRef.current.visible = burst > 0.012 // skip the draw entirely off-meet
+      if (shockRef.current.visible) {
+        const ss = lerp(0.2, 5, smooth(clamp01((p - 0.5) / 0.06)))
+        shockRef.current.scale.set(ss, ss, ss)
+        ;(shockRef.current.material as THREE.MeshBasicMaterial).opacity = burst * 0.85
+      }
+    }
   })
 
   return (
@@ -336,14 +372,28 @@ function Scene({
 
       <TrainingStudio />
 
-      {/* CONTACT SHADOW cast below the FLOATING pairs — grounds the levitation + gives the dark
-          stage its drama. The plane sits just above the ring; the pairs hover ~0.11 above it, so
-          this reads as a real floating-object shadow pooled beneath each shoe (not a blanket over
-          the glow). Tight scale so it darkens only under the pairs; the outer ring keeps glowing. */}
-      <ContactShadows position={[0, 0.009, 0]} scale={3.6} resolution={384} blur={1.8} opacity={0.84} far={1.2} color="#000000" frames={Infinity} />
+      {/* (Grounding is now per-object soft blob shadows — see the Pair component + Basketball —
+          instead of a drei <ContactShadows> pass that re-rendered the whole scene every frame.) */}
 
       <Pair url={ASSETS.blackRunner} faceSign={1} outerRef={lOuter} bobRef={lBob} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} />
+
+      {/* Gold meet SHOCKWAVE — a flat ring that bursts outward across the floor at p≈0.5 (driven above). */}
+      <mesh ref={shockRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} renderOrder={3}>
+        <ringGeometry args={[0.86, 1.0, 64]} />
+        <meshBasicMaterial color="#FFD27A" transparent opacity={0} depthWrite={false} />
+      </mesh>
+
+      {/* Interactive basketball — grab / drag / throw, bounces hard, sink it through the hoop. */}
+      <Basketball reduced={reduced} scrollProgress={scrollProgress} controlRef={ballControlRef} onScore={onScore} />
+
+      {/* Calibration helper for the swish RIM circle (off in production). */}
+      {DEBUG_RIM && (
+        <mesh position={[RIM.x, RIM.y, RIM.z]} rotation={[-Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[RIM.r, 0.012, 8, 48]} />
+          <meshBasicMaterial color="#39FF88" />
+        </mesh>
+      )}
 
       {/* No post-composer: the Canvas is NOT `flat`, so R3F applies ACES tonemap + MSAA
           natively (correct color + clean edges) without a per-frame full-screen pass. */}
@@ -360,11 +410,15 @@ export default function SkyScene({
   active,
   reduced,
   invalidateRef,
+  ballControlRef,
+  onScore,
 }: {
   scrollProgress: React.MutableRefObject<number>
   active: boolean
   reduced: boolean
   invalidateRef: React.MutableRefObject<(() => void) | null>
+  ballControlRef?: React.MutableRefObject<BallControl | null>
+  onScore?: () => void
 }) {
   // Assume integrated (shadows off) until a discrete GPU is confirmed in onCreated.
   const [reflective, setReflective] = useState(false)
@@ -389,7 +443,7 @@ export default function SkyScene({
       }}
     >
       <Suspense fallback={null}>
-        <Scene scrollProgress={scrollProgress} reduced={reduced} invalidateRef={invalidateRef} />
+        <Scene scrollProgress={scrollProgress} reduced={reduced} invalidateRef={invalidateRef} ballControlRef={ballControlRef} onScore={onScore} />
       </Suspense>
     </Canvas>
   )
@@ -406,3 +460,4 @@ useGLTF.preload(ASSETS.ballrack)
 useGLTF.preload(ASSETS.bench)
 useGLTF.preload(ASSETS.gymbag)
 useGLTF.preload(ASSETS.kettlebell)
+useGLTF.preload(ASSETS.basketball)

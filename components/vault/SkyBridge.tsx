@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useBedSection } from '@/lib/audio'
+import type { BallControl } from './Basketball'
 
 // Real 3D finale (WebGL/R3F) — client-only, like VaultCanvas.
 const SkyScene = dynamic(() => import('./SkyScene'), { ssr: false })
@@ -60,6 +61,9 @@ export default function SkyBridge() {
   const enterRef = useRef<HTMLDivElement>(null)
   const chargeRef = useRef<HTMLDivElement>(null)
   const glowRef = useRef<HTMLDivElement>(null)
+  const scoreFlashRef = useRef<HTMLDivElement>(null)
+  const ballControlRef = useRef<BallControl | null>(null)
+  const leftAt = useRef(-99999) // when the finale last left view (for a fresh ball drop on re-entry)
   // SkyScene runs frameloop="demand" — we call this to request a render ONLY when
   // scroll actually moves (the scene is a pure function of scroll). The big lag fix.
   const invalidateRef = useRef<(() => void) | null>(null)
@@ -81,6 +85,16 @@ export default function SkyBridge() {
   const rafId = useRef(0)
   const offset = useRef(0)
   const span = useRef(1)
+
+  // Swish! → a quick gold flash (pure DOM: set opacity, let the CSS transition fade it). No setState.
+  const onScore = useCallback(() => {
+    const el = scoreFlashRef.current
+    if (!el) return
+    el.style.opacity = '0.6'
+    window.setTimeout(() => {
+      if (el) el.style.opacity = '0'
+    }, 70)
+  }, [])
 
   useEffect(() => {
     const mqR = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -117,10 +131,19 @@ export default function SkyBridge() {
     // mounts, bakes its env, uploads the (preloaded) models + renders its first frames while
     // still hidden behind the black entrance overlay. Scrolling in then reveals an already-warm,
     // smooth scene instead of a decode/first-frame hitch (the "laggy entrance").
-    const warm = new IntersectionObserver(([e]) => setInView(e.isIntersecting), {
-      threshold: 0,
-      rootMargin: '100% 0px 100% 0px',
-    })
+    const warm = new IntersectionObserver(
+      ([e]) => {
+        setInView(e.isIntersecting)
+        if (e.isIntersecting) {
+          // Fresh drop + hard bounce on (re)entry after a real gap, so the ball "lands" again.
+          if (performance.now() - leftAt.current > 2000) ballControlRef.current?.requestReset()
+        } else {
+          leftAt.current = performance.now()
+          ballControlRef.current?.releaseDrag() // never leave a drag captured while parked
+        }
+      },
+      { threshold: 0, rootMargin: '100% 0px 100% 0px' }
+    )
     // HEADER observer — fade the store header to full-bleed the cinematic frame ONLY when the
     // finale is actually on screen (kept on real intersection so the header doesn't vanish early).
     const head = new IntersectionObserver(
@@ -209,7 +232,7 @@ export default function SkyBridge() {
           <Image src="/images/scene-cloud.webp" alt="ON Cloudmonster" fill priority sizes="100vw" className="object-cover opacity-90" />
         ) : (
           <div className="absolute inset-0">
-            <SkyScene scrollProgress={scrollProgress} active={inView} reduced={reduced} invalidateRef={invalidateRef} />
+            <SkyScene scrollProgress={scrollProgress} active={inView} reduced={reduced} invalidateRef={invalidateRef} ballControlRef={ballControlRef} onScore={onScore} />
           </div>
         )}
 
@@ -281,6 +304,20 @@ export default function SkyBridge() {
           aria-hidden
           className="absolute inset-0 pointer-events-none z-[6] mix-blend-screen"
           style={{ opacity: 0, backgroundImage: 'radial-gradient(ellipse 55% 48% at 50% 52%, rgba(255,228,170,0.6), rgba(255,198,122,0.2) 42%, transparent 70%)' }}
+        />
+
+        {/* SWISH flash — a quick warm-gold burst when you sink a basket (driven by onScore;
+            opacity is set to 0.6 then transitions back to 0 over 0.5s → a clean "score!" pulse). */}
+        <div
+          ref={scoreFlashRef}
+          aria-hidden
+          className="absolute inset-0 pointer-events-none z-[7] mix-blend-screen"
+          style={{
+            opacity: 0,
+            transition: 'opacity 0.5s ease-out',
+            backgroundImage:
+              'radial-gradient(ellipse 70% 60% at 50% 46%, rgba(255,224,150,0.85), rgba(255,196,110,0.3) 40%, transparent 72%)',
+          }}
         />
 
         {/* Copy + CTA (lands after the meeting, upper area) */}
