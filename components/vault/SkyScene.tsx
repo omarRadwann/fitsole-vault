@@ -22,7 +22,9 @@ const smooth = (x: number) => x * x * (3 - 2 * x)
 // premium without textures — no tiling/seam risk.) ──
 const fallbackMat = new THREE.MeshStandardMaterial({ color: '#2A2C30', roughness: 0.6, metalness: 0.3 })
 // Darker matte concrete — walls + ceiling (recede into shadow so the lit product pops).
-const wallConcreteMat = new THREE.MeshStandardMaterial({ color: '#191A1E', roughness: 0.96, metalness: 0.0 })
+// Lambert (per-vertex, no PBR/env) — the walls + ceiling fill most of the screen but are flat
+// matte dark, so this shades MUCH cheaper per fragment than Standard with no visible change.
+const wallConcreteMat = new THREE.MeshLambertMaterial({ color: '#191A1E' })
 // Brushed dark steel — structural I-beam columns, spotlight housings, accents.
 const steelMat = new THREE.MeshStandardMaterial({ color: '#3B3F46', roughness: 0.34, metalness: 0.9 })
 // Gold LED accent — the centre performance ring + a back-wall brand line. Its
@@ -325,7 +327,7 @@ function Scene({
 
       {/* Athletic IBL — a cool-white ceiling + front fill (performance-arena light) with a
           warm gold back accent (the brand). Baked once (frames=1), free per-frame. */}
-      <Environment resolution={256} frames={1}>
+      <Environment resolution={128} frames={1}>
         {/* IBL pulled WAY down — the scene must read DARK (lit only by the focused spots + the
             ring), so the ambient image light barely fills. Just enough to keep materials from
             going pure-black and to give the steel a faint cool sheen. */}
@@ -364,11 +366,10 @@ function Scene({
       {/* Cool rim from behind-above — separates the dark pairs from the dark studio. Boosted
           so the shoe silhouettes get a crisp premium edge-glow (esp. the darker olive runner). */}
       <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={48} distance={9} decay={2} color="#B4C6F4" />
-      {/* LEAN cinematic light set (2 point lights) — every light shades every fragment, so on the
-          iGPU fewer lights = real FPS. ONE warm front fill (offset left to also lift the darker
-          olive pair) + ONE cool back fill that lifts the props/structure off black as silhouettes. */}
-      <pointLight position={[-0.5, 0.75, 1.9]} intensity={14} color="#FFE7CC" distance={5.5} decay={2} />
-      <pointLight position={[0, 3.0, -4.8]} intensity={4.5} color="#AEC0E8" distance={11} decay={2} />
+      {/* LEAN cinematic light set — every light shades every fragment, so on the iGPU fewer lights
+          = real FPS. ONE warm front fill (offset left to also lift the darker olive pair). The props
+          now read from the baked env IBL alone (the dark room is the point — no dedicated fill). */}
+      <pointLight position={[-0.5, 0.75, 1.9]} intensity={15} color="#FFE7CC" distance={6} decay={2} />
 
       <TrainingStudio />
 

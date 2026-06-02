@@ -46,6 +46,10 @@ interface LoadedModelProps {
   // safe, reversible lever to make the hero read richer/glossier WITHOUT
   // re-authoring the GLB. Applied to MeshStandardMaterial only.
   envMapIntensity?: number
+  // Add a subtle self-illumination so a model still reads in a dark scene (e.g. the
+  // basketball keeps its orange even when it rolls out of the light). MeshStandardMaterial only.
+  emissive?: THREE.ColorRepresentation
+  emissiveIntensity?: number
 }
 
 function LoadedModel({
@@ -58,6 +62,8 @@ function LoadedModel({
   castShadow = false,
   material,
   envMapIntensity,
+  emissive,
+  emissiveIntensity,
 }: LoadedModelProps) {
   const gltf = useGLTF(url)
   // Clone so the same GLB can be instanced in multiple places (e.g. shelf modules).
@@ -81,16 +87,21 @@ function LoadedModel({
       clone.position.y -= seat === 'bottom' ? box2.min.y : center.y
     }
 
-    if (castShadow || material || envMapIntensity !== undefined) {
+    if (castShadow || material || envMapIntensity !== undefined || emissive !== undefined) {
       clone.traverse((o) => {
         const mesh = o as THREE.Mesh
         if (!mesh.isMesh) return
         if (castShadow) mesh.castShadow = true
         if (material) mesh.material = material
-        if (envMapIntensity !== undefined) {
+        if (envMapIntensity !== undefined || emissive !== undefined) {
           const apply = (mm: THREE.Material) => {
             const std = mm as THREE.MeshStandardMaterial
-            if (std.isMeshStandardMaterial) std.envMapIntensity = envMapIntensity
+            if (!std.isMeshStandardMaterial) return
+            if (envMapIntensity !== undefined) std.envMapIntensity = envMapIntensity
+            if (emissive !== undefined) {
+              std.emissive = new THREE.Color(emissive)
+              std.emissiveIntensity = emissiveIntensity ?? 1
+            }
           }
           if (Array.isArray(mesh.material)) mesh.material.forEach(apply)
           else apply(mesh.material)

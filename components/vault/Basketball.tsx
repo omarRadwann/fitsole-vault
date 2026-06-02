@@ -36,7 +36,7 @@ export function blobTexture(): THREE.CanvasTexture {
 const R = 0.16 // ball radius (matches normalizeTo 0.32 of a ~spherical GLB)
 const SPAWN = new THREE.Vector3(1.4, 3.6, -1.2) // off the meet axis, high → a hard first bounce
 const GRAV = -9
-const REST = 0.78 // floor restitution (hard bounce)
+const REST = 0.82 // floor restitution (lively, hard bounce)
 const REST_WALL = 0.62
 const AIR = 0.012
 const ROLL_FRICTION = 1.5
@@ -47,7 +47,9 @@ const SLEEP_VY = 0.07
 const SLEEP_VXZ = 0.05
 const SQUASH_MIN = 0.64
 const SQUASH_RECOVER = 9
-const BOUNDS = { xMin: -6 + R, xMax: 6 - R, zMin: -6.3 + R, zMax: 2.0 - R }
+// Playable area kept INSIDE the camera's view so the ball can never roll/fly off-screen where
+// you can't grab it (the studio walls are much further out at x±7.6).
+const BOUNDS = { xMin: -3.2, xMax: 3.2, zMin: -4.3, zMax: 1.8 }
 const OOB = { yFloor: -2, xAbs: 8, zMin: -8, zMax: 4 }
 
 // Rim circle for swish detection (CALIBRATE against the moved hoop with ?debugRim / DEBUG_RIM).
@@ -86,6 +88,7 @@ export default function Basketball({
       scoreCooldown: 0,
       prevY: SPAWN.y,
       prevP: 0,
+      meetKickCd: 0,
       drag: { active: false, samples: [] as { x: number; y: number; z: number; t: number }[] },
       plane: new THREE.Plane(),
       camFwd: new THREE.Vector3(),
@@ -251,13 +254,17 @@ export default function Basketball({
     }
     S.prevY = S.pos.y
 
-    // MEET kick — the ball reacts to the climactic meet (edge-trigger on the p=0.5 crossing).
-    if (!reduced && !S.drag.active) {
+    // MEET kick — the ball gives a gentle HOP at the climactic meet (edge-trigger on the p=0.5
+    // crossing), nudged toward CENTRE so it never gets flung into a wall / off-screen, with a
+    // cooldown so rapid scroll back/forth across 0.5 can't fling it repeatedly.
+    if (S.meetKickCd > 0) S.meetKickCd -= dt
+    if (!reduced && !S.drag.active && S.meetKickCd <= 0) {
       if ((S.prevP < 0.5 && p >= 0.5) || (S.prevP > 0.5 && p <= 0.5)) {
         S.sleeping = false
         S.dropped = true
-        S.vel.y += 4.5
-        S.vel.x += (S.pos.x >= 0 ? 1 : -1) * 2.0
+        S.vel.y += 3.2
+        S.vel.x += (S.pos.x >= 0 ? -1 : 1) * 1.0 // toward centre, not into the wall
+        S.meetKickCd = 1.2
       }
     }
     S.prevP = p
@@ -280,6 +287,7 @@ export default function Basketball({
         ;(blob.current.material as THREE.MeshBasicMaterial).opacity = 0.36 * k
       }
     }
+
   })
 
   return (
@@ -290,7 +298,9 @@ export default function Basketball({
             url={ASSETS.basketball}
             normalizeTo={0.32}
             seat="center"
-            envMapIntensity={0.9}
+            envMapIntensity={1.0}
+            emissive="#e0641e"
+            emissiveIntensity={0.16}
             fallback={
               <mesh>
                 <sphereGeometry args={[R, 24, 16]} />
