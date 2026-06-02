@@ -53,7 +53,7 @@ function Pair({
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
-            envMapIntensity={0.75}
+            envMapIntensity={0.88}
             fallback={
               <mesh material={fallbackMat} castShadow position={[0, 0.27, 0]}>
                 <boxGeometry args={[0.6, 0.27, 0.22]} />
@@ -264,10 +264,10 @@ function Scene({
     // At the meet (p≈0.5) the two performance spots SWELL and the gold ring + back-wall
     // brand line IGNITE — the finale payoff. Then they settle for the present.
     const glow = Math.exp(-(((p - 0.5) / 0.15) ** 2))
-    // Balanced keys — rich enough to hero the pairs (esp. the darker olive runner), softer than
-    // the old 42+glow*46 swell that blew them to plastic. The rim + fills carry the form.
-    if (keyRef.current) keyRef.current.intensity = 40 + glow * 30
-    if (key2Ref.current) key2Ref.current.intensity = 27 + glow * 22
+    // Tighter dramatic keys — they pool on the pairs (the room is dark). key2 (the LEFT cross-key)
+    // is boosted extra so the darker olive runner reads as premium as the brighter teal pair.
+    if (keyRef.current) keyRef.current.intensity = 44 + glow * 32
+    if (key2Ref.current) key2Ref.current.intensity = 36 + glow * 26
     ringMat.emissiveIntensity = 1.9 + glow * 4.8
   })
 
@@ -299,8 +299,8 @@ function Scene({
         ref={keyRef}
         position={[1.9, 4.0, 1.5]}
         target={spotTarget}
-        angle={0.5}
-        penumbra={0.85}
+        angle={0.44}
+        penumbra={0.9}
         intensity={30}
         distance={15}
         decay={2}
@@ -313,7 +313,7 @@ function Scene({
         shadow-camera-far={12}
       />
       {/* Cross-key — cool-white from the opposite side (the converging broadcast look). */}
-      <spotLight ref={key2Ref} position={[-2.1, 3.8, 1.0]} target={spotTarget} angle={0.52} penumbra={0.9} intensity={22} distance={15} decay={2} color="#E6EEFF" />
+      <spotLight ref={key2Ref} position={[-2.1, 3.8, 1.0]} target={spotTarget} angle={0.46} penumbra={0.92} intensity={22} distance={15} decay={2} color="#E6EEFF" />
       {/* Cool rim from behind-above — separates the dark pairs from the dark studio. Boosted
           so the shoe silhouettes get a crisp premium edge-glow (esp. the darker olive runner). */}
       <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={44} distance={9} decay={2} color="#C8D4F0" />
@@ -329,10 +329,16 @@ function Scene({
       {/* Cool back fill so the steel structure JUST reads against the dark wall (kept low — the
           studio is meant to fall into shadow now). */}
       <pointLight position={[0, 2.6, -5.4]} intensity={2.2} color="#AFC0E4" distance={11} decay={2} />
-      {/* Faint cool ZONE fills — the props read only as dim silhouettes framing the lit hero
-          (dropped hard: the dark room is the point; the spotlit ring + pairs are the subject). */}
-      <pointLight position={[-2.7, 2.2, -4.0]} intensity={3} color="#B8C6E8" distance={9} decay={2} />
-      <pointLight position={[2.7, 2.2, -4.0]} intensity={3} color="#B8C6E8" distance={9} decay={2} />
+      {/* Faint cool ZONE fills — barely lift the props off pure black (the dark room is the point). */}
+      <pointLight position={[-2.7, 2.2, -4.0]} intensity={1.6} color="#B8C6E8" distance={9} decay={2} />
+      <pointLight position={[2.7, 2.2, -4.0]} intensity={1.6} color="#B8C6E8" distance={9} decay={2} />
+      {/* Warm fill on the LEFT (olive) pair from the camera side so it reads as premium as the
+          brighter teal pair (the olive On runner is a darker material — it needs the extra lift). */}
+      <pointLight position={[-1.2, 0.6, 1.5]} intensity={7} color="#FFE2C2" distance={3.6} decay={2} />
+      {/* Cool RIM behind the prop clusters — rakes their back edges so the kit reads as crisp
+          intentional silhouettes against the dark wall (not murky blobs), room still dark. */}
+      <pointLight position={[-3.7, 2.5, -5.7]} intensity={6} color="#AEC0E8" distance={5.5} decay={2} />
+      <pointLight position={[3.7, 2.5, -5.7]} intensity={6} color="#AEC0E8" distance={5.5} decay={2} />
 
       <TrainingStudio />
 
