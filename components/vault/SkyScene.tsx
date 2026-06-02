@@ -49,7 +49,7 @@ function Pair({
         <Suspense fallback={null}>
           <ModelOrFallback
             url={url}
-            normalizeTo={0.78}
+            normalizeTo={0.66}
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
@@ -78,7 +78,7 @@ function TrainingStudio() {
           (the showroom sheen) on every GPU; the live reflection grounds the pairs. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]} receiveShadow>
         <planeGeometry args={[26, 30]} />
-        <MeshReflectorMaterial resolution={128} blur={[180, 80]} mixBlur={1} mixStrength={0.45} depthScale={0.5} color="#24242A" metalness={0.5} roughness={0.42} />
+        <MeshReflectorMaterial resolution={128} blur={[150, 70]} mixBlur={1} mixStrength={0.7} depthScale={0.5} color="#222228" metalness={0.6} roughness={0.34} />
       </mesh>
 
       {/* CENTRE PERFORMANCE RING — a glowing gold ring inlaid flush where the pairs meet:
@@ -146,21 +146,23 @@ function TrainingStudio() {
           estimates, tuned by capture; the furniture GLBs use `scale` (their bbox doesn't
           resolve for normalizeTo). castShadow → only renders on discrete (shadows gated). ── */}
       <Suspense fallback={null}>
-        {/* BACKDROP — hoop (hero, back-wall high-centre). */}
+        {/* BACKDROP — hoop centred high on the back wall (the facility's centrepiece). */}
         <ModelOrFallback url={ASSETS.hoop} scale={2.6} position={[0, 3.05, -6.2]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        {/* LEFT ZONE (depth-stacked so the slow orbit reads a wall of kit) — lockers (back) →
-            ball rack → bench + gym bag (front). All pulled into the camera's cone (x≈-2.5). */}
-        <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[-2.7, 1.05, -6.0]} rotation={[0, 0.35, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.ballrack} scale={1.9} position={[-2.7, 1.0, -4.7]} rotation={[0, 0.55, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.bench} scale={2.3} position={[-2.3, 0.48, -3.3]} rotation={[0, 0.7, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.gymbag} scale={0.95} position={[-2.2, 1.0, -3.3]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
-        {/* RIGHT ZONE — lit podium with a FEATURED hero shoe raised on it + shoeboxes behind. */}
-        <ModelOrFallback url={ASSETS.podium} scale={1.5} position={[2.4, 0.17, -3.4]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.blackRunner} normalizeTo={0.52} seat="bottom" position={[2.4, 0.34, -3.4]} rotation={[0, -0.7, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.shoeboxes} scale={1.05} position={[2.9, 0.52, -5.0]} rotation={[0, -0.45, 0]} castShadow fallback={null} />
-        {/* NEAR THE RING — kettlebell (right) + a loose basketball (front-left). */}
-        <ModelOrFallback url={ASSETS.kettlebell} scale={0.55} position={[1.7, 0.27, -1.3]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.basketball} scale={0.42} position={[-1.4, 0.21, 0.7]} rotation={[0, 0, 0]} castShadow fallback={null} />
+        {/* BACK WALL — lockers (left) BALANCED by stacked shoeboxes (right). */}
+        <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[-3.5, 1.05, -6.1]} rotation={[0, 0.4, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.shoeboxes} scale={1.05} position={[3.4, 0.52, -6.0]} rotation={[0, -0.5, 0]} castShadow fallback={null} />
+        {/* MID GROUND — ball rack (left) BALANCED by the lit podium + a featured shoe (right). */}
+        <ModelOrFallback url={ASSETS.ballrack} scale={1.9} position={[-3.1, 1.0, -4.5]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.podium} scale={1.5} position={[3.0, 0.17, -4.5]} rotation={[0, 0, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.blackRunner} normalizeTo={0.5} seat="bottom" position={[3.0, 0.345, -4.5]} rotation={[0, -0.8, 0]} castShadow fallback={null} />
+        {/* FORE-LEFT — the bench (angled inward) + the gym bag on the FLOOR beside it (not on it). */}
+        <ModelOrFallback url={ASSETS.bench} scale={2.2} position={[-2.7, 0.46, -3.0]} rotation={[0, 0.9, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.gymbag} scale={0.7} position={[-1.85, 0.28, -2.2]} rotation={[0, 0.6, 0]} castShadow fallback={null} />
+        {/* THE LEFT KIT CORNER — a loose basketball tucked beside the bench (a small detail,
+            NOT a bright foreground hero — kept back + small so it nods to sport without
+            stealing the eye from the pairs). The kettlebell flanks the ring on the right. */}
+        <ModelOrFallback url={ASSETS.basketball} scale={0.3} position={[-2.45, 0.15, -1.1]} rotation={[0, 0, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.kettlebell} scale={0.52} position={[1.9, 0.26, -1.5]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
       </Suspense>
     </group>
   )
@@ -217,8 +219,8 @@ function Scene({
     const dive = smooth(clamp01((p - 0.86) / 0.14))
     const cx = 0, cy = 0.34, cz = -0.05 // orbit centre ≈ the ring / meeting point
     const theta = lerp(-0.34, 0.4, smooth(p)) // a left→right arc
-    const radius = lerp(3.2, 2.15, smooth(clamp01(p / 0.7))) - dive * 0.3 // CLOSER so the hero pairs dominate at every beat (not just the end)
-    const camH = lerp(0.34, 0.52, smooth(p)) // low heroic angle, rising a touch
+    const radius = lerp(3.5, 2.7, smooth(clamp01(p / 0.7))) - dive * 0.3 // close enough to hero the pairs, pulled back so they don't overflow the frame
+    const camH = lerp(0.4, 0.58, smooth(p)) // low heroic angle, rising a touch
     camera.position.set(cx + Math.sin(theta) * radius, camH, cz + Math.cos(theta) * radius)
     camera.lookAt(cx, cy + dive * 0.05, cz)
 
@@ -254,7 +256,7 @@ function Scene({
     const glow = Math.exp(-(((p - 0.5) / 0.15) ** 2))
     if (keyRef.current) keyRef.current.intensity = 42 + glow * 46
     if (key2Ref.current) key2Ref.current.intensity = 30 + glow * 34
-    ringMat.emissiveIntensity = 1.5 + glow * 4.4
+    ringMat.emissiveIntensity = 1.9 + glow * 4.8
   })
 
   return (
@@ -276,7 +278,7 @@ function Scene({
           (the cross-key look of a broadcast court), a cool rim separates them from the dark
           studio, and a warm gold up-glow rises from the ring. Dark studio + lit product =
           the hero. The two keys swell at the meet (driven above). */}
-      <ambientLight intensity={0.06} color="#C2CCDE" />
+      <ambientLight intensity={0.05} color="#C2CCDE" />
       <primitive object={spotTarget} position={[0, 0.4, 0]} />
       <spotLight
         ref={keyRef}
@@ -311,8 +313,11 @@ function Scene({
           so the FULL FACILITY reads; kept low so the central ring stays the hero. */}
       <pointLight position={[-2.7, 2.2, -4.0]} intensity={9} color="#B8C6E8" distance={9} decay={2} />
       <pointLight position={[2.7, 2.2, -4.0]} intensity={9} color="#B8C6E8" distance={9} decay={2} />
-      {/* Warm accent on the podium so the featured shoe pops. */}
-      <pointLight position={[2.4, 1.1, -3.4]} intensity={6} color="#FFCD82" distance={4} decay={2} />
+      {/* Warm accent on the podium (now at x3.0,z-4.5) so the featured shoe pops. */}
+      <pointLight position={[3.0, 1.1, -4.5]} intensity={8} color="#FFCD82" distance={4.5} decay={2} />
+      {/* Soft front fill on the LEFT kit corner (bench + bag + ball) so they read as real
+          kit instead of black blobs — gentle + short range, keeps the centre the hero. */}
+      <pointLight position={[-2.3, 1.3, -2.0]} intensity={7} color="#C6D2EC" distance={5} decay={2} />
 
       <TrainingStudio />
 

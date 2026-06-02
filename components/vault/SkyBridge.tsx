@@ -212,11 +212,12 @@ export default function SkyBridge() {
           className="absolute inset-0 pointer-events-none"
           style={{
             backgroundImage:
-              // A soft warm 'god-ray' cone spilling from the ceiling light over the pairs
-              // (good-vibes atmosphere) + a gentle vignette to focus the frame.
-              // Stronger, taller volumetric god-ray spilling from the ceiling strip.
-              'radial-gradient(ellipse 30% 78% at 50% 0%, rgba(255,224,176,0.2), rgba(255,206,150,0.06) 44%, transparent 72%),' +
-              'radial-gradient(ellipse 96% 96% at 50% 46%, transparent 60%, rgba(0,0,0,0.46) 100%)',
+              // A DEFINED cinematic spotlight shaft over the ring — a tight bright core beam
+              // + a wide soft halo — plus a DEEPER vignette that sinks the studio into shadow
+              // so the lit hero pairs pop (the premium 'arena spotlight' look). Compositor-cheap.
+              'radial-gradient(ellipse 15% 72% at 50% -6%, rgba(255,238,206,0.36), rgba(255,216,162,0.08) 38%, transparent 64%),' +
+              'radial-gradient(ellipse 44% 92% at 50% -2%, rgba(255,224,176,0.13), transparent 58%),' +
+              'radial-gradient(ellipse 100% 100% at 50% 44%, transparent 48%, rgba(0,0,0,0.64) 100%)',
           }}
         />
 
