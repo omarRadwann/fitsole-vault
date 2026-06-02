@@ -151,10 +151,9 @@ function TrainingStudio() {
         {/* BACK WALL — lockers (left) BALANCED by stacked shoeboxes (right). */}
         <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[-3.5, 1.05, -6.1]} rotation={[0, 0.4, 0]} castShadow fallback={null} />
         <ModelOrFallback url={ASSETS.shoeboxes} scale={1.05} position={[3.4, 0.52, -6.0]} rotation={[0, -0.5, 0]} castShadow fallback={null} />
-        {/* MID GROUND — ball rack (left) BALANCED by the lit podium + a featured shoe (right). */}
+        {/* MID GROUND — ball rack (left). (The podium + featured shoe lived at x3,z-4.5 but the
+            camera orbit never frames that spot, so they were cut as unseen draw-call dead weight.) */}
         <ModelOrFallback url={ASSETS.ballrack} scale={1.9} position={[-3.1, 1.0, -4.5]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.podium} scale={1.5} position={[3.0, 0.17, -4.5]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.blackRunner} normalizeTo={0.5} seat="bottom" position={[3.0, 0.345, -4.5]} rotation={[0, -0.8, 0]} castShadow fallback={null} />
         {/* FORE-LEFT — the bench (angled inward) + the gym bag on the FLOOR beside it (not on it). */}
         <ModelOrFallback url={ASSETS.bench} scale={2.2} position={[-2.7, 0.46, -3.0]} rotation={[0, 0.9, 0]} castShadow fallback={null} />
         <ModelOrFallback url={ASSETS.gymbag} scale={0.7} position={[-1.85, 0.28, -2.2]} rotation={[0, 0.6, 0]} castShadow fallback={null} />
@@ -313,8 +312,6 @@ function Scene({
           so the FULL FACILITY reads; kept low so the central ring stays the hero. */}
       <pointLight position={[-2.7, 2.2, -4.0]} intensity={9} color="#B8C6E8" distance={9} decay={2} />
       <pointLight position={[2.7, 2.2, -4.0]} intensity={9} color="#B8C6E8" distance={9} decay={2} />
-      {/* Warm accent on the podium (now at x3.0,z-4.5) so the featured shoe pops. */}
-      <pointLight position={[3.0, 1.1, -4.5]} intensity={8} color="#FFCD82" distance={4.5} decay={2} />
       {/* Soft front fill on the LEFT kit corner (bench + bag + ball) so they read as real
           kit instead of black blobs — gentle + short range, keeps the centre the hero. */}
       <pointLight position={[-2.3, 1.3, -2.0]} intensity={7} color="#C6D2EC" distance={5} decay={2} />
