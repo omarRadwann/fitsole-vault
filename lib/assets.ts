@@ -21,6 +21,17 @@ export const ASSETS = {
   sofa: `${TRIPO}/sofa_v01.optimized.glb`,
   mirror: `${TRIPO}/mirror_v01.optimized.glb`,
   olive: `${TRIPO}/olive_v01.optimized.glb`,
+  // Pro training-studio props (user-uploaded Tripo image-to-3D, optimized webp+meshopt):
+  // a complete athletic facility dressing the finale studio (SkyScene "Full Facility").
+  hoop: `${TRIPO}/hoop_v01.optimized.glb`,
+  podium: `${TRIPO}/podium_v01.optimized.glb`,
+  lockers: `${TRIPO}/lockers_v01.optimized.glb`,
+  basketball: `${TRIPO}/basketball_v01.optimized.glb`,
+  bench: `${TRIPO}/bench_v01.optimized.glb`,
+  kettlebell: `${TRIPO}/kettlebell_v01.optimized.glb`,
+  gymbag: `${TRIPO}/gymbag_v01.optimized.glb`,
+  ballrack: `${TRIPO}/ballrack_v01.optimized.glb`,
+  shoeboxes: `${TRIPO}/shoeboxes_v01.optimized.glb`,
 } as const
 
 // Lightweight sneakers displayed across the drop-wall shelves (cycled).

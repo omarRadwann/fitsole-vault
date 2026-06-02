@@ -2,36 +2,35 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Environment, Lightformer, MeshReflectorMaterial, RoundedBox, useTexture } from '@react-three/drei'
+import { Environment, Lightformer, MeshReflectorMaterial } from '@react-three/drei'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
-import { withBase } from '@/lib/basePath'
 import { isIntegratedGpu, readGpuRenderer } from '@/lib/deviceTier'
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const smooth = (x: number) => x * x * (3 - 2 * x)
 
-// ── Warm-luxury try-on lounge — solid-PBR material library. The vault proves solid
-// materials + good lighting read premium without textures (no tiling/seam risk). ──
-const fallbackMat = new THREE.MeshStandardMaterial({ color: '#3A352E', roughness: 0.5, metalness: 0.3 })
-// Polished warm-wood floor (INTEGRATED path; discrete gets the live reflector below).
-const woodFloorMat = new THREE.MeshStandardMaterial({ color: '#241710', roughness: 0.24, metalness: 0.0 })
-// Warm limewash plaster — walls + ceiling.
-const plasterMat = new THREE.MeshStandardMaterial({ color: '#2A2018', roughness: 0.96, metalness: 0.0 })
-// Tan leather try-on bench.
-const leatherMat = new THREE.MeshStandardMaterial({ color: '#4A3322', roughness: 0.55, metalness: 0.05 })
-// Brushed brass — mirror frame, baseboard, bench legs, accents (matches the vault).
-const brassMat = new THREE.MeshStandardMaterial({ color: '#C9A36A', roughness: 0.34, metalness: 0.9 })
-// Dark mirror glass for INTEGRATED (no live reflection — just a framed dark pane).
-const darkGlassMat = new THREE.MeshStandardMaterial({ color: '#0E0B08', roughness: 0.04, metalness: 0.95 })
-// Warm emissive ceiling light strip (the practical that motivates the key light).
-const stripMat = new THREE.MeshStandardMaterial({ color: '#FFE7C6', emissive: '#FFE0B0', emissiveIntensity: 1.5, roughness: 1, metalness: 0 })
+// ── PRO TRAINING STUDIO — solid-PBR material library. Dark concrete + brushed steel +
+// bold emissive LED accents. (The vault proved solid materials + good lighting read
+// premium without textures — no tiling/seam risk.) ──
+const fallbackMat = new THREE.MeshStandardMaterial({ color: '#2A2C30', roughness: 0.6, metalness: 0.3 })
+// Darker matte concrete — walls + ceiling (recede into shadow so the lit product pops).
+const wallConcreteMat = new THREE.MeshStandardMaterial({ color: '#191A1E', roughness: 0.96, metalness: 0.0 })
+// Brushed dark steel — structural I-beam columns, spotlight housings, accents.
+const steelMat = new THREE.MeshStandardMaterial({ color: '#3B3F46', roughness: 0.34, metalness: 0.9 })
+// Gold LED accent — the centre performance ring + a back-wall brand line. Its
+// emissiveIntensity is driven in useFrame to IGNITE at the meet (the wow payoff).
+const ringMat = new THREE.MeshStandardMaterial({ color: '#FFE4AE', emissive: '#FFC766', emissiveIntensity: 1.8, roughness: 1, metalness: 0 })
+// Cool-white LED — sporty accent strips (the athletic contrast to the warm gold).
+const ledCoolMat = new THREE.MeshStandardMaterial({ color: '#EAF1FF', emissive: '#BFD4FF', emissiveIntensity: 1.8, roughness: 1, metalness: 0 })
+// Warm lit floor-pool inside the performance ring (a soft glow under the pairs).
+const poolMat = new THREE.MeshStandardMaterial({ color: '#17160F', emissive: '#6A4E22', emissiveIntensity: 0.45, roughness: 0.5, metalness: 0.2 })
 
 // The two pairs: an outer group (walk X + present yaw) → a bob group (step bounce +
-// lean-into-travel + heel-toe rock) → the model (faces inward). The models CAST REAL
-// SHADOWS now — that (not a fake blob) is what grounds them in the room.
+// lean-into-travel + heel-toe rock) → the model (faces inward). Believable sneaker scale
+// now (normalizeTo 0.6) so they read as real shoes on the platform, not giant props.
 function Pair({
   url,
   faceSign,
@@ -50,14 +49,14 @@ function Pair({
         <Suspense fallback={null}>
           <ModelOrFallback
             url={url}
-            normalizeTo={1.0}
+            normalizeTo={0.78}
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
-            envMapIntensity={0.9}
+            envMapIntensity={0.95}
             fallback={
-              <mesh material={fallbackMat} castShadow position={[0, 0.45, 0]}>
-                <boxGeometry args={[1, 0.45, 0.36]} />
+              <mesh material={fallbackMat} castShadow position={[0, 0.27, 0]}>
+                <boxGeometry args={[0.6, 0.27, 0.22]} />
               </mesh>
             }
           />
@@ -67,131 +66,102 @@ function Pair({
   )
 }
 
-// The lounge shell — a real room: a polished wood floor (receives the pairs' real
-// shadows + reflects the warm room), warm plaster back/side walls + ceiling, a brass
-// baseboard, an emissive ceiling light strip, a leather try-on bench, and a brass-
-// framed mirror that reflects the pairs (live on discrete, a dark framed pane on
-// integrated). All solid PBR — premium via lighting, not textures.
-function Lounge({ reflective, woodTex, plasterTex }: { reflective: boolean; woodTex: THREE.Texture; plasterTex: THREE.Texture }) {
-  // Baked "real glass" reflection for the mirror — DEEP DARK glass with CRISP bright
-  // reflected-light highlights. A polished mirror in a dim warm room reads as dark glass
-  // with sharp warm highlights (the reflected lights), NOT a soft uniform glow — so high
-  // contrast is what makes it read as REAL glass, not a frosted panel. Renders identically
-  // on EVERY GPU (env-specular goes black on the iGPU; a live render-reflection just
-  // mirrors the dark room → also near-black — both proven).
-  const mirrorTex = useMemo(() => {
-    const c = document.createElement('canvas')
-    c.width = 96; c.height = 256
-    const ctx = c.getContext('2d')!
-    // Deep dark glass base so the reflected highlights pop (contrast = polished glass).
-    ctx.fillStyle = '#0C0908'
-    ctx.fillRect(0, 0, 96, 256)
-    // A dim warm wash — the dark warm room faintly reflected (subtle, not a flat panel).
-    const wash = ctx.createLinearGradient(0, 0, 0, 256)
-    wash.addColorStop(0, 'rgba(36,28,18,0)')
-    wash.addColorStop(0.5, 'rgba(94,68,42,0.45)')
-    wash.addColorStop(1, 'rgba(28,20,12,0)')
-    ctx.fillStyle = wash
-    ctx.fillRect(0, 0, 96, 256)
-    // The MONEY cue: a crisp bright vertical highlight — the reflected ceiling light strip,
-    // sharp + warm, slightly left of centre. This is what reads as REAL polished glass.
-    const hl = ctx.createLinearGradient(34, 0, 58, 0)
-    hl.addColorStop(0, 'rgba(255,232,196,0)')
-    hl.addColorStop(0.5, 'rgba(255,240,214,0.95)')
-    hl.addColorStop(1, 'rgba(255,232,196,0)')
-    ctx.fillStyle = hl
-    ctx.fillRect(34, 8, 24, 240)
-    // A second, dimmer reflected source for depth/realism (off to the right).
-    const hl2 = ctx.createLinearGradient(66, 0, 78, 0)
-    hl2.addColorStop(0, 'rgba(228,206,172,0)')
-    hl2.addColorStop(0.5, 'rgba(228,206,172,0.4)')
-    hl2.addColorStop(1, 'rgba(228,206,172,0)')
-    ctx.fillStyle = hl2
-    ctx.fillRect(66, 28, 12, 200)
-    const t = new THREE.CanvasTexture(c)
-    t.colorSpace = THREE.SRGBColorSpace
-    return t
-  }, [])
+// The PRO TRAINING STUDIO shell — a dark concrete + steel performance space: a polished
+// concrete floor that reflects the pairs + the spotlights, a central GLOWING PERFORMANCE
+// RING inlaid flush in the floor (the focal stage — it ignites at the meet), steel I-beam
+// structure, cool-LED + gold-LED accents, and dark walls that recede into shadow so the lit
+// product is the hero. Solid PBR — premium via lighting + structure, not textures.
+function TrainingStudio() {
   return (
     <group>
-      {/* Warm WALNUT floor (real wood texture — what lifts it from a flat brown plane
-          to a real floor). Receives the pairs' real shadows + a live reflection on
-          discrete; glossy textured static on integrated. */}
+      {/* Polished dark-concrete performance floor — reflects the pairs + the spotlights
+          (the showroom sheen) on every GPU; the live reflection grounds the pairs. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]} receiveShadow>
-        <planeGeometry args={[22, 24]} />
-        {/* Live reflection on ALL GPUs now (low 128 res) so the pairs reflect in the
-            polished wood right under them — the immersive "real room" magic. */}
-        <MeshReflectorMaterial map={woodTex} resolution={128} blur={[200, 90]} mixBlur={1} mixStrength={0.6} depthScale={0.6} color="#6E4E30" metalness={0.12} roughness={0.42} />
+        <planeGeometry args={[26, 30]} />
+        <MeshReflectorMaterial resolution={128} blur={[180, 80]} mixBlur={1} mixStrength={0.45} depthScale={0.5} color="#24242A" metalness={0.5} roughness={0.42} />
       </mesh>
 
-      {/* Warm plaster enclosure — back + side walls (real plaster texture) + a plain ceiling */}
-      <mesh position={[0, 2.3, -6]} receiveShadow>
-        <planeGeometry args={[16, 6]} />
-        <meshStandardMaterial map={plasterTex} roughness={0.96} metalness={0} />
+      {/* CENTRE PERFORMANCE RING — a glowing gold ring inlaid flush where the pairs meet:
+          the focal "stage" + the WOW (ringMat's emissive is driven to ignite at the meet). */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} material={ringMat}>
+        <ringGeometry args={[0.98, 1.16, 90]} />
       </mesh>
-      <mesh position={[-7, 2.3, -1]} rotation={[0, Math.PI / 2, 0]}>
-        <planeGeometry args={[14, 6]} />
-        <meshStandardMaterial map={plasterTex} roughness={0.96} metalness={0} />
+      {/* a soft warm pool inside the ring (a lit floor spot under the pairs) */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0]} material={poolMat}>
+        <circleGeometry args={[0.98, 64]} />
       </mesh>
-      <mesh position={[7, 2.3, -1]} rotation={[0, -Math.PI / 2, 0]}>
-        <planeGeometry args={[14, 6]} />
-        <meshStandardMaterial map={plasterTex} roughness={0.96} metalness={0} />
+      {/* Two straight cool lane lines flanking the ring — a training-floor cue. */}
+      {[-2.4, 2.4].map((x, i) => (
+        <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.006, -0.5]} material={ledCoolMat}>
+          <planeGeometry args={[0.05, 7]} />
+        </mesh>
+      ))}
+
+      {/* Dark concrete enclosure — back + side walls + ceiling (recede into shadow). */}
+      <mesh position={[0, 2.8, -6.6]} receiveShadow material={wallConcreteMat}>
+        <planeGeometry args={[26, 9]} />
       </mesh>
-      <mesh position={[0, 4.4, -1]} rotation={[Math.PI / 2, 0, 0]} material={plasterMat}>
-        <planeGeometry args={[16, 14]} />
+      <mesh position={[-7.6, 2.8, -1]} rotation={[0, Math.PI / 2, 0]} material={wallConcreteMat}>
+        <planeGeometry args={[17, 9]} />
+      </mesh>
+      <mesh position={[7.6, 2.8, -1]} rotation={[0, -Math.PI / 2, 0]} material={wallConcreteMat}>
+        <planeGeometry args={[17, 9]} />
+      </mesh>
+      <mesh position={[0, 5.4, -1]} rotation={[Math.PI / 2, 0, 0]} material={wallConcreteMat}>
+        <planeGeometry args={[26, 17]} />
       </mesh>
 
-      {/* Brass baseboard along the back wall */}
-      <mesh position={[0, 0.07, -5.93]} material={brassMat}>
-        <boxGeometry args={[16, 0.14, 0.04]} />
+      {/* Steel I-beam columns along the back wall — industrial athletic depth. */}
+      {[-4.6, -1.6, 1.6, 4.6].map((x, i) => (
+        <group key={i} position={[x, 0, -6.3]}>
+          <mesh position={[0, 2.7, 0]} material={steelMat}>
+            <boxGeometry args={[0.16, 5.4, 0.46]} />
+          </mesh>
+          <mesh position={[0, 2.7, 0.24]} material={steelMat}>
+            <boxGeometry args={[0.46, 5.4, 0.06]} />
+          </mesh>
+        </group>
+      ))}
+      {/* Cool-LED strips up the outer columns (athletic energy). */}
+      {[-4.6, 4.6].map((x, i) => (
+        <mesh key={i} position={[x, 2.7, -6.04]} material={ledCoolMat}>
+          <boxGeometry args={[0.05, 5.0, 0.04]} />
+        </mesh>
+      ))}
+      {/* A horizontal gold brand line low across the back wall (depth + warm anchor). */}
+      <mesh position={[0, 0.55, -6.5]} material={ringMat}>
+        <boxGeometry args={[15, 0.05, 0.04]} />
       </mesh>
 
-      {/* Recessed warm ceiling light strip over the bench — the key's practical source */}
-      <mesh position={[0, 4.36, -1.6]} material={stripMat}>
-        <boxGeometry args={[3.6, 0.05, 0.16]} />
-      </mesh>
+      {/* Steel spotlight housings on the ceiling over the platform (motivate the keys). */}
+      {[-1.4, 1.4].map((x, i) => (
+        <mesh key={i} position={[x, 5.1, 0.2]} material={steelMat}>
+          <cylinderGeometry args={[0.16, 0.2, 0.32, 16]} />
+        </mesh>
+      ))}
 
-      {/* Real leather SOFA (Tripo GLB) centre-back — rotated 90° so the GLB's long axis
-          (Z) becomes the width; the pairs meet in front of it. */}
-      <ModelOrFallback
-        url={ASSETS.sofa}
-        scale={2.4}
-        position={[0, 0.65, -3.5]}
-        rotation={[0, -Math.PI / 2, 0]}
-        castShadow
-        fallback={
-          <RoundedBox args={[2.3, 0.5, 0.9]} radius={0.08} smoothness={3} position={[0, 0.4, -3.5]} material={leatherMat} castShadow />
-        }
-      />
-
-      {/* Ornate floor mirror (Tripo GLB) — stood to the LEFT, angled toward centre, so
-          it reads BESIDE the sofa (it was lost dead-centre behind it) + its frame
-          catches the warm light. */}
-      <ModelOrFallback url={ASSETS.mirror} scale={2.8} position={[-2.5, 1.4, -4.7]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
-      {/* Live reflective GLASS on the mirror's face so the pairs reflect IN the mirror
-          (the fitting-room magic). Placed at the mirror's front-face centre in world
-          space — bbox depth 0.1787 × scale 2.8 ≈ 0.5 along the y=0.5 normal (0.48,0,0.88),
-          recessed to ~0.46 so it sits inside the frame — matching its yaw. Low 96-res:
-          the 2nd (cheaper) reflection pass, on ALL GPUs so it always reads. */}
-      <mesh position={[-2.23, 1.5, -4.21]} rotation={[0, 0.5, 0]}>
-        <planeGeometry args={[0.62, 1.7]} />
-        {/* Mirror glass = the baked "real glass" reflection (mirrorTex: deep dark glass +
-            crisp warm reflected-light highlights), self-lit so the highlights glow in the
-            dark lounge → reads as a polished mirror, never black, on EVERY GPU. metalness +
-            low roughness layer a real env reflection on top where the GPU supports it
-            (discrete). Perf-free — no render pass. Just proud of the GLB's ~1m-deep body. */}
-        <meshStandardMaterial
-          map={mirrorTex}
-          emissiveMap={mirrorTex}
-          emissive="#FFFFFF"
-          emissiveIntensity={0.55}
-          metalness={0.7}
-          roughness={0.08}
-          envMapIntensity={1.6}
-        />
-      </mesh>
-      {/* Olive tree (Tripo GLB) — back-right corner, a tall warm-vibes accent. */}
-      <ModelOrFallback url={ASSETS.olive} scale={2.6} position={[3.0, 1.3, -4.8]} rotation={[0, -0.3, 0]} castShadow fallback={null} />
+      {/* ── THE FULL FACILITY — 9 real Tripo props dressing the studio in ZONES around the
+          central ring (kept clear for the two hero pairs). Wrapped in Suspense so the studio
+          shell paints immediately + props pop in as they load. Scales/positions are first
+          estimates, tuned by capture; the furniture GLBs use `scale` (their bbox doesn't
+          resolve for normalizeTo). castShadow → only renders on discrete (shadows gated). ── */}
+      <Suspense fallback={null}>
+        {/* BACKDROP — hoop (hero, back-wall high-centre). */}
+        <ModelOrFallback url={ASSETS.hoop} scale={2.6} position={[0, 3.05, -6.2]} rotation={[0, 0, 0]} castShadow fallback={null} />
+        {/* LEFT ZONE (depth-stacked so the slow orbit reads a wall of kit) — lockers (back) →
+            ball rack → bench + gym bag (front). All pulled into the camera's cone (x≈-2.5). */}
+        <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[-2.7, 1.05, -6.0]} rotation={[0, 0.35, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.ballrack} scale={1.9} position={[-2.7, 1.0, -4.7]} rotation={[0, 0.55, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.bench} scale={2.3} position={[-2.3, 0.48, -3.3]} rotation={[0, 0.7, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.gymbag} scale={0.95} position={[-2.2, 1.0, -3.3]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
+        {/* RIGHT ZONE — lit podium with a FEATURED hero shoe raised on it + shoeboxes behind. */}
+        <ModelOrFallback url={ASSETS.podium} scale={1.5} position={[2.4, 0.17, -3.4]} rotation={[0, 0, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.blackRunner} normalizeTo={0.52} seat="bottom" position={[2.4, 0.34, -3.4]} rotation={[0, -0.7, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.shoeboxes} scale={1.05} position={[2.9, 0.52, -5.0]} rotation={[0, -0.45, 0]} castShadow fallback={null} />
+        {/* NEAR THE RING — kettlebell (right) + a loose basketball (front-left). */}
+        <ModelOrFallback url={ASSETS.kettlebell} scale={0.55} position={[1.7, 0.27, -1.3]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.basketball} scale={0.42} position={[-1.4, 0.21, 0.7]} rotation={[0, 0, 0]} castShadow fallback={null} />
+      </Suspense>
     </group>
   )
 }
@@ -200,33 +170,21 @@ function Scene({
   scrollProgress,
   reduced,
   invalidateRef,
-  reflective,
 }: {
   scrollProgress: React.MutableRefObject<number>
   reduced: boolean
   invalidateRef: React.MutableRefObject<(() => void) | null>
-  reflective: boolean
 }) {
   const lOuter = useRef<THREE.Group>(null)
   const lBob = useRef<THREE.Group>(null)
   const rOuter = useRef<THREE.Group>(null)
   const rBob = useRef<THREE.Group>(null)
   const keyRef = useRef<THREE.SpotLight>(null)
+  const key2Ref = useRef<THREE.SpotLight>(null)
   const spotTarget = useMemo(() => new THREE.Object3D(), [])
   const shadowSeeded = useRef(false)
   const shadowTick = useRef(0)
   const { invalidate } = useThree()
-
-  // Room textures (real walnut + plaster — the "not cheap" richness). Tiled across the
-  // surfaces; loaded here since Scene is already inside Suspense. wrap/repeat mutation
-  // is idempotent per render.
-  const [woodTex, plasterTex] = useTexture([withBase('/textures/wood-floor.webp'), withBase('/textures/plaster.webp')])
-  woodTex.wrapS = woodTex.wrapT = THREE.RepeatWrapping
-  woodTex.repeat.set(5, 6)
-  woodTex.colorSpace = THREE.SRGBColorSpace
-  plasterTex.wrapS = plasterTex.wrapT = THREE.RepeatWrapping
-  plasterTex.repeat.set(4, 2)
-  plasterTex.colorSpace = THREE.SRGBColorSpace
 
   // Render once on mount; invalidateRef kept for SkyBridge (harmless under "always").
   useEffect(() => {
@@ -238,11 +196,10 @@ function Scene({
   }, [invalidate, invalidateRef])
 
   // Pure function of the (upstream-damped) scroll value → smooth continuous motion
-  // under frameloop="always". No clock terms.
+  // under frameloop="always". No clock terms (except the idle breathe).
   useFrame((state) => {
-    // Shadow throttle: the ROOM is static; only the pairs move. Take manual control of
-    // the shadow map and refresh it every 2nd frame — halves the depth pass with no
-    // visible change (a soft shadow lagging one frame behind the slow walk is invisible).
+    // Shadow throttle: the STUDIO is static; only the pairs move. Manual shadow-map
+    // control, refreshed every 2nd frame (only matters on discrete, where shadows run).
     if (!shadowSeeded.current) {
       shadowSeeded.current = true
       state.gl.shadowMap.autoUpdate = false
@@ -255,87 +212,82 @@ function Scene({
     const p = scrollProgress.current
     const camera = state.camera
 
-    // ── CINEMATIC CAMERA — a slow ORBIT + push-in around the meeting point, so the
-    // finale plays like a moving film shot (riding with the pairs' scroll-spin). Pure
-    // function of scroll → smooth under always-render.
+    // ── CINEMATIC CAMERA — a slow ORBIT + push-in around the performance ring, so the
+    // finale plays like a moving broadcast shot. Pure function of scroll.
     const dive = smooth(clamp01((p - 0.86) / 0.14))
-    const cx = 0, cy = 0.55, cz = -0.4 // orbit centre ≈ the meeting point
-    const theta = lerp(-0.34, 0.4, smooth(p)) // a gentle left→right arc (~-19°→+23°)
-    const radius = lerp(4.6, 3.3, smooth(clamp01(p / 0.7))) - dive * 0.5 // ease in + a push at the end
-    const camH = lerp(0.52, 0.72, smooth(p))
+    const cx = 0, cy = 0.34, cz = -0.05 // orbit centre ≈ the ring / meeting point
+    const theta = lerp(-0.34, 0.4, smooth(p)) // a left→right arc
+    const radius = lerp(3.2, 2.15, smooth(clamp01(p / 0.7))) - dive * 0.3 // CLOSER so the hero pairs dominate at every beat (not just the end)
+    const camH = lerp(0.34, 0.52, smooth(p)) // low heroic angle, rising a touch
     camera.position.set(cx + Math.sin(theta) * radius, camH, cz + Math.cos(theta) * radius)
-    camera.lookAt(cx, cy + dive * 0.06, cz)
+    camera.lookAt(cx, cy + dive * 0.05, cz)
 
     // ── THE WALK + SCROLL-DRIVEN SPIN ──────────────────────────────────────────
-    // FASTER walk-in (user: "move faster") — the pairs roll in from the wings and
-    // arrive at centre by ~p0.3 (was 0.5). Then a FULL scroll-driven rotation (user:
-    // "full rotate based of scroll speed"): the spin angle tracks scroll POSITION, so
-    // scrolling faster spins them faster; ~2.5 turns across the finale. Pure function
-    // of scroll → smooth under always-render, holds its angle at rest.
+    // The pairs roll in from the wings + arrive on the ring by ~p0.3, then a FULL
+    // scroll-driven rotation (scroll faster → spin faster; ~2.5 turns across the finale).
     const we = smooth(clamp01(p / 0.3))
     const gait = reduced ? 0 : 1 - smooth(clamp01((p - 0.18) / 0.12))
-    const steps = clamp01(p / 0.3) * 5 * Math.PI * 2 // a touch more steps = a livelier stride
-    const bobUp = Math.abs(Math.sin(steps)) * 0.045 * gait // more bounce
-    const settle = reduced ? 0 : Math.exp(-(((p - 0.3) / 0.045) ** 2)) * 0.045 // plant compression on arrival
+    const steps = clamp01(p / 0.3) * 5 * Math.PI * 2
+    const bobUp = Math.abs(Math.sin(steps)) * 0.03 * gait
+    const settle = reduced ? 0 : Math.exp(-(((p - 0.3) / 0.045) ** 2)) * 0.03
     const rock = Math.sin(steps) * 0.07 * gait
     const lean = (1 - smooth(clamp01((p - 0.2) / 0.12))) * 0.11 * (reduced ? 0 : 1)
     const spin = reduced ? 0 : p * Math.PI * 2 * 2.5
-    const tilt = reduced ? 0 : Math.sin(spin) * 0.04 // a subtle wobble as they spin — more physical
-    // Idle FLOAT — once arrived, the pairs gently breathe (clock-based; the canvas
-    // renders always, so they stay ALIVE even when scroll is paused). Out of phase.
+    const tilt = reduced ? 0 : Math.sin(spin) * 0.04
+    // Idle FLOAT — once arrived, the pairs gently breathe (clock-based; always-render).
     const present = smooth(clamp01((Math.min(p, 0.86) - 0.32) / 0.4))
     const t = state.clock.elapsedTime
-    const floatL = reduced ? 0 : Math.sin(t * 1.1) * 0.02 * present
-    const floatR = reduced ? 0 : Math.sin(t * 1.1 + 1.7) * 0.02 * present
+    const floatL = reduced ? 0 : Math.sin(t * 1.1) * 0.016 * present
+    const floatR = reduced ? 0 : Math.sin(t * 1.1 + 1.7) * 0.016 * present
 
-    const lx = lerp(-4.5, -0.55, we)
-    const rx = lerp(4.5, 0.55, we)
+    const lx = lerp(-4.5, -0.58, we)
+    const rx = lerp(4.5, 0.58, we)
     const baseY = bobUp - settle
     if (lOuter.current) { lOuter.current.position.x = lx; lOuter.current.rotation.y = spin }
     if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -spin }
     if (lBob.current) { lBob.current.position.y = baseY + floatL; lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt }
     if (rBob.current) { rBob.current.position.y = baseY + floatR; rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt }
 
-    // Warm key swells into a hero "REVEAL" at the meeting, then settles for the present.
-    if (keyRef.current) {
-      const glow = Math.exp(-(((p - 0.5) / 0.16) ** 2))
-      keyRef.current.intensity = 44 + glow * 28
-    }
+    // ── THE MEET "REVEAL" ─────────────────────────────────────────────────────
+    // At the meet (p≈0.5) the two performance spots SWELL and the gold ring + back-wall
+    // brand line IGNITE — the finale payoff. Then they settle for the present.
+    const glow = Math.exp(-(((p - 0.5) / 0.15) ** 2))
+    if (keyRef.current) keyRef.current.intensity = 42 + glow * 46
+    if (key2Ref.current) key2Ref.current.intensity = 30 + glow * 34
+    ringMat.emissiveIntensity = 1.5 + glow * 4.4
   })
 
   return (
     <>
-      <color attach="background" args={['#0A0806']} />
-      <fog attach="fog" args={['#0A0806', 10, 28]} />
+      <color attach="background" args={['#08080B']} />
+      <fog attach="fog" args={['#08080B', 9, 26]} />
 
-      {/* Warm IBL — soft fill for the pairs' PBR + the floor/mirror reflections. A warm
-          ceiling key panel + warm wall fills + ONE cool side panel (a 'window') so the
-          dark A.E.1 separates from the warm room. Baked once (frames=1), free per-frame. */}
+      {/* Athletic IBL — a cool-white ceiling + front fill (performance-arena light) with a
+          warm gold back accent (the brand). Baked once (frames=1), free per-frame. */}
       <Environment resolution={256} frames={1}>
-        <Lightformer intensity={1.4} color="#FFD8A0" position={[0, 5, -1]} rotation={[-Math.PI / 2, 0, 0]} scale={[9, 9, 1]} />
-        <Lightformer intensity={0.8} color="#FFE7C6" position={[0, 2, 4]} scale={[8, 5, 1]} />
-        <Lightformer intensity={0.5} color="#C9A36A" position={[5, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]} scale={[6, 5, 1]} />
-        <Lightformer intensity={0.6} color="#AFC4F0" position={[-5, 2.5, 1]} rotation={[0, Math.PI / 2, 0]} scale={[5, 5, 1]} />
-        <Lightformer intensity={0.35} color="#E8D2B0" position={[0, 2.2, -5]} scale={[10, 4, 1]} />
+        <Lightformer intensity={1.0} color="#EAF0FF" position={[0, 5, 1]} rotation={[-Math.PI / 2, 0, 0]} scale={[11, 11, 1]} />
+        <Lightformer intensity={0.6} color="#DCE6FF" position={[0, 2, 5]} scale={[9, 5, 1]} />
+        <Lightformer intensity={0.5} color="#FFD79A" position={[0, 1.4, -5]} scale={[10, 3, 1]} />
+        <Lightformer intensity={0.4} color="#AFC4F0" position={[-5, 2.5, 0]} rotation={[0, Math.PI / 2, 0]} scale={[6, 5, 1]} />
+        <Lightformer intensity={0.4} color="#AFC4F0" position={[5, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]} scale={[6, 5, 1]} />
       </Environment>
 
-      {/* Lighting that FITS the room — DRAMATIC, not flat: a low warm ambient so the
-          corners fall into shadow (depth), a bright warm KEY pooling on the pairs +
-          floor (shadow caster — the real grounding), a cool side 'window' for
-          separation, a warm practical under the strip, and a warm back-wall graze so
-          the mirror/bench read against a gradient instead of a flat brown box. */}
-      <ambientLight intensity={0.07} color="#FFE0C0" />
-      <primitive object={spotTarget} position={[0, 0.55, -0.3]} />
+      {/* Bold PERFORMANCE LIGHTING — two converging spotlights stage the pairs on the ring
+          (the cross-key look of a broadcast court), a cool rim separates them from the dark
+          studio, and a warm gold up-glow rises from the ring. Dark studio + lit product =
+          the hero. The two keys swell at the meet (driven above). */}
+      <ambientLight intensity={0.06} color="#C2CCDE" />
+      <primitive object={spotTarget} position={[0, 0.4, 0]} />
       <spotLight
         ref={keyRef}
-        position={[0, 3.8, 1.0]}
+        position={[1.9, 4.0, 1.5]}
         target={spotTarget}
-        angle={0.58}
-        penumbra={0.9}
-        intensity={46}
-        distance={16}
+        angle={0.5}
+        penumbra={0.85}
+        intensity={30}
+        distance={15}
         decay={2}
-        color="#FFE3C2"
+        color="#FFF3E6"
         castShadow
         shadow-mapSize={[512, 512]}
         shadow-bias={-0.0004}
@@ -343,20 +295,26 @@ function Scene({
         shadow-camera-near={1}
         shadow-camera-far={12}
       />
-      {/* Cool side fill — a 'window' raking from the left, separating the dark pairs. */}
-      <spotLight position={[-5, 3, 2]} target={spotTarget} angle={0.8} penumbra={1} intensity={6} distance={16} decay={2} color="#BFD0EE" />
-      {/* Cool RIM/edge light from behind-above — catches the top-back edges of the dark
-          BLACK-RUNNER pair so it READS against the dark room (product-photography rim,
-          not a flat fill). No shadow (cheap); aimed DOWN at the pairs so it never flares
-          the camera even at the low front angle. */}
-      <spotLight position={[0, 2.8, -2.3]} target={spotTarget} angle={0.62} penumbra={1} intensity={30} distance={9} decay={2} color="#C8D4F0" />
-      {/* Warm practical glow under the ceiling strip */}
-      <pointLight position={[0, 3.5, -1.6]} intensity={3.5} color="#FFD9A6" distance={9} decay={2} />
-      {/* Warm back-wall graze — a soft gradient on the back wall/mirror (kept low so
-          the room stays DARK + moody, matching the vault; the key pool is the focus). */}
-      <pointLight position={[0, 1.9, -4.2]} intensity={3.6} color="#FFCF95" distance={10} decay={2} />
+      {/* Cross-key — cool-white from the opposite side (the converging broadcast look). */}
+      <spotLight ref={key2Ref} position={[-2.1, 3.8, 1.0]} target={spotTarget} angle={0.52} penumbra={0.9} intensity={22} distance={15} decay={2} color="#E6EEFF" />
+      {/* Cool rim from behind-above — separates the dark pairs from the dark studio. */}
+      <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={30} distance={9} decay={2} color="#C8D4F0" />
+      {/* Warm gold up-glow rising from the performance ring — dramatic + ties to the ring
+          (toned down: too strong under-lit the shoes unflatteringly). */}
+      <pointLight position={[0, 0.18, 0]} intensity={4} color="#FFC878" distance={4} decay={2} />
+      {/* Warm FRONT fill from the camera side — lifts the shoes' faces so their form +
+          detail read (not dark blobs); short range so it mostly touches the hero pairs. */}
+      <pointLight position={[0, 0.85, 2.4]} intensity={11} color="#FFE8CC" distance={5} decay={2} />
+      {/* Cool back fill so the steel structure reads against the dark wall. */}
+      <pointLight position={[0, 2.6, -5.4]} intensity={5} color="#AFC0E4" distance={11} decay={2} />
+      {/* Soft cool ZONE fills — light the prop zones (left rack/bench, right podium/boxes)
+          so the FULL FACILITY reads; kept low so the central ring stays the hero. */}
+      <pointLight position={[-2.7, 2.2, -4.0]} intensity={9} color="#B8C6E8" distance={9} decay={2} />
+      <pointLight position={[2.7, 2.2, -4.0]} intensity={9} color="#B8C6E8" distance={9} decay={2} />
+      {/* Warm accent on the podium so the featured shoe pops. */}
+      <pointLight position={[2.4, 1.1, -3.4]} intensity={6} color="#FFCD82" distance={4} decay={2} />
 
-      <Lounge reflective={reflective} woodTex={woodTex} plasterTex={plasterTex} />
+      <TrainingStudio />
 
       <Pair url={ASSETS.blackRunner} faceSign={1} outerRef={lOuter} bobRef={lBob} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} />
@@ -368,13 +326,9 @@ function Scene({
 }
 
 // Canvas wrapper (dynamic-imported by SkyBridge, ssr:false).
-// PERF (iGPU-first — 2nd WebGL canvas over the vault's):
-//   • shadows="soft" with ONE shadow-casting key, 1024 map, refreshed every 2nd frame
-//     (room static, only the pairs move) → real grounding at low cost. THE fix for the
-//     "floating cut-out" look that a flat backplate could never solve.
-//   • frameloop="always" while in view → smooth continuous motion; parks "never" off-screen.
-//   • dpr 1.0. Reflection (floor + mirror) is the cheap MeshReflectorMaterial on DISCRETE
-//     only; integrated gets glossy static wood + a dark framed mirror. Native ACES + MSAA.
+// PERF (iGPU-first — 2nd WebGL canvas over the vault's): ONE 128-res floor reflection on
+// all GPUs; real-time shadows gated to DISCRETE only (the floor reflection grounds the
+// pairs on the iGPU). frameloop="always" while in view; parks "never" off-screen. dpr 1.0.
 export default function SkyScene({
   scrollProgress,
   active,
@@ -386,32 +340,30 @@ export default function SkyScene({
   reduced: boolean
   invalidateRef: React.MutableRefObject<(() => void) | null>
 }) {
-  // Assume integrated (static floor/mirror) until a discrete GPU is confirmed in onCreated.
+  // Assume integrated (shadows off) until a discrete GPU is confirmed in onCreated.
   const [reflective, setReflective] = useState(false)
   return (
     <Canvas
-      // Real-time shadows only on DISCRETE GPUs (reflective === !integrated). On the
-      // Iris Xe the finale always-renders + runs the floor reflection pass; a 512² shadow
-      // map on top is real per-frame cost for little gain here — the pairs stay grounded
-      // by their reflection in the polished floor. A consistent perf win with the vault's
-      // shadow gate (the user's "enhance performance"). Discrete GPUs keep the cast shadow.
+      // Real-time shadows only on DISCRETE GPUs (reflective === !integrated). On the iGPU
+      // the always-render finale + the floor reflection is enough; a shadow map on top is
+      // real cost for little gain — the pairs stay grounded by their floor reflection.
       shadows={reflective ? 'percentage' : false}
       frameloop={active ? 'always' : 'never'}
       dpr={1}
-      camera={{ position: [0, 0.58, 4.1], fov: 38, near: 0.1, far: 40 }}
+      camera={{ position: [0, 0.5, 4.0], fov: 40, near: 0.1, far: 40 }}
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
-      style={{ background: '#0A0806' }}
+      style={{ background: '#08080B' }}
       aria-hidden="true"
       onCreated={({ gl }) => {
         try {
           setReflective(!isIntegratedGpu(readGpuRenderer(gl.getContext())))
         } catch {
-          /* keep the cheap static floor/mirror on any failure */
+          /* keep shadows off on any failure */
         }
       }}
     >
       <Suspense fallback={null}>
-        <Scene scrollProgress={scrollProgress} reduced={reduced} invalidateRef={invalidateRef} reflective={reflective} />
+        <Scene scrollProgress={scrollProgress} reduced={reduced} invalidateRef={invalidateRef} />
       </Suspense>
     </Canvas>
   )
