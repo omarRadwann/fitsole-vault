@@ -62,23 +62,42 @@ function sparkTexture(): THREE.CanvasTexture {
 // In-scene EMBERS — warm dust/embers drifting up through the spotlight (real 3D depth + parallax, vs
 // the old flat DOM motes that sat ON the glass). Additive points, ~1 draw call, JS-animated (cheap for
 // this count). Concentrated toward the lit centre so they glow in the beam and fade into the dark wings.
-function Embers({ count = 190, reduced }: { count?: number; reduced: boolean }) {
+function Embers({
+  count = 130,
+  reduced,
+  size = 0.05,
+  color = '#FFD9A0',
+  opacity = 0.42,
+  speedMin = 0.07,
+  speedVar = 0.14,
+  seed = 0,
+}: {
+  count?: number
+  reduced: boolean
+  size?: number
+  color?: string
+  opacity?: number
+  speedMin?: number
+  speedVar?: number
+  seed?: number
+}) {
   const ref = useRef<THREE.Points>(null)
   const tex = useMemo(sparkTexture, [])
   const { positions, speeds } = useMemo(() => {
+    // deterministic-ish per-seed offset so the two layers don't sit on identical positions
+    let s = seed * 1000 + 1
+    const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647 }
     const positions = new Float32Array(count * 3)
     const speeds = new Float32Array(count)
     for (let i = 0; i < count; i++) {
       // bias x/z toward centre (sum of two randoms → triangular) so embers pool in the light
-      const bx = (Math.random() + Math.random() - 1) * 3.2
-      const bz = -2 + (Math.random() + Math.random() - 1) * 3.4
-      positions[i * 3] = bx
-      positions[i * 3 + 1] = Math.random() * 5.0
-      positions[i * 3 + 2] = bz
-      speeds[i] = 0.07 + Math.random() * 0.14
+      positions[i * 3] = (rnd() + rnd() - 1) * 3.2
+      positions[i * 3 + 1] = rnd() * 5.0
+      positions[i * 3 + 2] = -2 + (rnd() + rnd() - 1) * 3.4
+      speeds[i] = speedMin + rnd() * speedVar
     }
     return { positions, speeds }
-  }, [count])
+  }, [count, speedMin, speedVar, seed])
   useFrame((_, delta) => {
     if (reduced) return
     const g = ref.current?.geometry
@@ -99,13 +118,13 @@ function Embers({ count = 190, reduced }: { count?: number; reduced: boolean }) 
       </bufferGeometry>
       <pointsMaterial
         map={tex}
-        size={0.05}
+        size={size}
         sizeAttenuation
         transparent
-        opacity={0.45}
+        opacity={opacity}
         depthWrite={false}
         blending={THREE.AdditiveBlending}
-        color="#FFD9A0"
+        color={color}
       />
     </points>
   )
@@ -518,8 +537,10 @@ function Scene({
         <pointsMaterial map={sparkTex} size={0.05} sizeAttenuation transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} color="#FFE2A6" />
       </points>
 
-      {/* In-scene warm embers drifting up through the spotlight — real 3D atmosphere + depth. */}
-      <Embers reduced={reduced} />
+      {/* In-scene atmosphere — TWO layers so the dust reads organic, not uniform: warm slow embers +
+          a finer, cooler, faster fine-dust haze drifting up through the spotlight (real 3D depth). */}
+      <Embers reduced={reduced} count={120} size={0.058} color="#FFD49A" opacity={0.42} speedMin={0.06} speedVar={0.12} seed={1} />
+      <Embers reduced={reduced} count={110} size={0.028} color="#CFE0FF" opacity={0.3} speedMin={0.12} speedVar={0.2} seed={2} />
 
       {/* Interactive basketball — grab / drag / throw, bounces hard, sink it through the hoop. */}
       <Basketball reduced={reduced} scrollProgress={scrollProgress} controlRef={ballControlRef} onScore={onScore} />
