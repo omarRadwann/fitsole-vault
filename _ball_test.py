@@ -30,7 +30,10 @@ with sync_playwright() as pw:
     box = pg.evaluate("""()=>{const s=document.querySelector('section[aria-label="FitSole — two drops, one vault"]');return s?{top:s.offsetTop,height:s.offsetHeight,vh:innerHeight}:null}""")
     span = box["height"] - box["vh"]
     pg.evaluate(f"window.scrollTo(0,{box['top'] + 0.4 * span})")
-    pg.wait_for_timeout(4500)  # let the ball drop + settle
+    pg.wait_for_timeout(450)  # SHORT — catch the ball mid-drop (bounce-on-enter)
+    print("BALL on enter (want it high + falling):", ball())
+    shot("bt_0_enter")
+    pg.wait_for_timeout(4200)  # now let it settle
 
     print("BALL after settle:", ball())
     shot("bt_1_settled")
@@ -62,13 +65,16 @@ with sync_playwright() as pw:
         moved = abs((after or {}).get("wx", 0) - (before or {}).get("wx", 0)) + abs((after or {}).get("wy", 0) - (before or {}).get("wy", 0))
         print(f"    drag moved the ball by ~{moved:.2f} world units (should be > 0 if drag works)")
         shot("bt_2_dragging")
-        pg.mouse.move(bx - 230, by - 150)  # fast flick
+        pg.mouse.move(bx, by - 330)  # fast UP flick → should SHOOT toward the hoop
         pg.wait_for_timeout(16)
         pg.mouse.up()
         pg.wait_for_timeout(150)
-        print("after RELEASE:", ball())
-        pg.wait_for_timeout(900)  # let it fly + bounce
-        print("after FLIGHT:", ball())
+        rel = ball()
+        print("after RELEASE:", rel)
+        pg.wait_for_timeout(700)  # let it fly toward the hoop
+        af = ball()
+        print("after FLIGHT:", af)
+        print(f"    z went {(before or {}).get('wz')} -> {(af or {}).get('wz')} (more negative = arced toward the hoop = shoot works)")
         shot("bt_3_thrown")
 
     fps = pg.evaluate(f"""()=>new Promise(r=>{{let n=0;const t0=performance.now();let y={box['top'] + 0.3 * span};(function f(){{n++;y+=5;window.scrollTo(0,y);const d=performance.now()-t0;d<3000?requestAnimationFrame(f):r((n/(d/1000)).toFixed(1))}})()}})""")

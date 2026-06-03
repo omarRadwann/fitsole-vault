@@ -210,7 +210,7 @@ export default function SkyBridge() {
       // ENTRANCE: the room fades UP from black over the first ~12%, EASED (smoothstep) so the
       // reveal glides instead of ramping linearly — a soft cinematic open from the vault. The
       // canvas is already warm (rootMargin warm-up) so the reveal shows a smooth scene, not a hitch.
-      if (enterRef.current) enterRef.current.style.opacity = (1 - smooth(clamp01(p / 0.12))).toFixed(3)
+      if (enterRef.current) enterRef.current.style.opacity = (1 - smooth(clamp01(p / 0.15))).toFixed(3)
       // EXIT: a clean fade to BLACK as the camera dives in (p .84→1), seamless into the
       // dark shop below. (The old warm-orange flood read as a flash + clashed with the
       // dark theme — removed.)

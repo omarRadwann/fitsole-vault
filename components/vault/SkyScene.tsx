@@ -56,7 +56,7 @@ function Pair({
         <Suspense fallback={null}>
           <ModelOrFallback
             url={url}
-            normalizeTo={0.30}
+            normalizeTo={0.22}
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
@@ -71,7 +71,7 @@ function Pair({
       </group>
       {/* Soft drop shadow under the pair — a cheap textured blob. As a child of the OUTER group it
           follows the walk-in x + the spin automatically, and stays on the floor while the bob floats. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} scale={[0.34, 0.17, 1]} renderOrder={2}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} scale={[0.26, 0.13, 1]} renderOrder={2}>
         <circleGeometry args={[1, 24]} />
         <meshBasicMaterial map={blobTexture()} transparent opacity={0.5} depthWrite={false} />
       </mesh>
@@ -165,22 +165,15 @@ function TrainingStudio() {
           estimates, tuned by capture; the furniture GLBs use `scale` (their bbox doesn't
           resolve for normalizeTo). castShadow → only renders on discrete (shadows gated). ── */}
       <Suspense fallback={null}>
-        {/* BACKDROP — hoop brought FORWARD + lower so the rim is reachable for the ball game
-            (was [0,3.05,-6.2] s2.6). Rim circle calibrated via RIM/DEBUG_RIM in Basketball.tsx. */}
+        {/* A DELIBERATE, SYMMETRIC set framing the hero pairs (cut the scattered kettlebell + gym
+            bag — fewer, aligned props read clean, not "messy"): the hoop centred high, two lockers
+            flanking it square on the back wall, and a bench (left) mirrored by the ball rack (right).
+            Everything sits OUTSIDE the ball's playable area so the game stays clear. */}
         <ModelOrFallback url={ASSETS.hoop} scale={2.2} position={[0, 2.7, -5.4]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        {/* BACK WALL — a SYMMETRIC locker room flanking the hoop, doors FACING THE VIEWER (+z).
-            (If the GLB faces away on first capture, switch these rotations to [0, Math.PI, 0].) */}
-        <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[-3.5, 1.05, -6.1]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.lockers} scale={2.1} position={[3.5, 1.05, -6.1]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        {/* MID-LEFT — the ball rack (holds its own balls; the loose red basketball was cut as a
-            colour-clashing duplicate). */}
-        <ModelOrFallback url={ASSETS.ballrack} scale={1.9} position={[-3.1, 1.0, -4.5]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
-        {/* SYMMETRIC DEPTH around the ring — each side mirrors the other so the silhouettes frame
-            the floating hero pairs: bench (fore-LEFT) ↔ kettlebell (fore-RIGHT), ball rack
-            (mid-LEFT) ↔ gym bag (mid-RIGHT), lockers (back L+R), hoop (centre). */}
-        <ModelOrFallback url={ASSETS.bench} scale={2.2} position={[-2.55, 0.46, -3.0]} rotation={[0, 0.85, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.kettlebell} scale={0.52} position={[2.3, 0.26, -2.9]} rotation={[0, -0.5, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.gymbag} scale={0.7} position={[3.0, 0.28, -4.3]} rotation={[0, -0.7, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.lockers} scale={2.0} position={[-2.7, 1.0, -6.2]} rotation={[0, 0, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.lockers} scale={2.0} position={[2.7, 1.0, -6.2]} rotation={[0, 0, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.bench} scale={2.1} position={[-3.05, 0.46, -2.7]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.ballrack} scale={1.8} position={[3.05, 0.95, -2.9]} rotation={[0, -0.5, 0]} castShadow fallback={null} />
       </Suspense>
     </group>
   )
@@ -249,8 +242,8 @@ function Scene({
     const dive = smooth(clamp01((p - 0.86) / 0.14))
     const cx = 0, cy = 0.34, cz = -0.05 // orbit centre ≈ the ring / meeting point
     const theta = lerp(-0.34, 0.4, smooth(p)) // a left→right arc
-    const radius = lerp(3.9, 3.1, smooth(clamp01(p / 0.7))) - dive * 0.3 // pulled back so the SMALL pairs read as compact hero objects in a vast dark space (cinematic)
-    const camH = lerp(0.44, 0.6, smooth(p)) // low heroic angle, rising a touch
+    const radius = lerp(4.5, 3.4, smooth(clamp01(p / 0.7))) - dive * 0.3 // starts wide (cinematic push-IN on entrance) → settles; small pairs + ball read as compact pieces in a vast dark space
+    const camH = lerp(0.46, 0.62, smooth(p)) // low heroic angle, rising a touch
     camera.position.set(cx + Math.sin(theta) * radius, camH, cz + Math.cos(theta) * radius)
     camera.lookAt(cx, cy + dive * 0.05, cz)
 
@@ -281,8 +274,8 @@ function Scene({
     const floatL = reduced ? 0 : Math.sin(t * 1.1) * 0.016 * present
     const floatR = reduced ? 0 : Math.sin(t * 1.1 + 1.7) * 0.016 * present
 
-    const lx = lerp(-4.5, -0.45, we)
-    const rx = lerp(4.5, 0.45, we)
+    const lx = lerp(-4.5, -0.34, we)
+    const rx = lerp(4.5, 0.34, we)
     // The pairs HOVER above the ring (a premium floating-product display): fully visible —
     // nothing hidden by the floor/ring — with a soft contact shadow cast below to ground the
     // levitation. LIFE during the spin: a bob synced to the spin phase, a slight X tumble, a

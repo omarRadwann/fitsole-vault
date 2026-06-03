@@ -33,27 +33,28 @@ export function blobTexture(): THREE.CanvasTexture {
   return _blobTex
 }
 
-const R = 0.16 // ball radius (matches normalizeTo 0.32 of a ~spherical GLB)
-const SPAWN = new THREE.Vector3(1.4, 3.6, -1.2) // off the meet axis, high → a hard first bounce
-const GRAV = -9
-const REST = 0.82 // floor restitution (lively, hard bounce)
-const REST_WALL = 0.62
-const AIR = 0.012
+const R = 0.11 // ball radius (matches normalizeTo 0.22 — much smaller, per request)
+const SPAWN = new THREE.Vector3(1.0, 2.5, -1.0) // mid-scene + high → drops INTO VIEW + bounces hard on enter (kept back so it doesn't loom near the camera)
+const GRAV = -10
+const REST = 0.84 // floor restitution (lively, hard bounce)
+const REST_WALL = 0.6
+const AIR = 0.01
 const ROLL_FRICTION = 1.5
 const MAX_SPEED = 14
-const THROW_GAIN = 1.7
-const THROW_CAP = 12
+const THROW_GAIN = 1.9
+const THROW_CAP = 10.5 // capped so even a hard flick reaches ~rim height, never flies off-screen
+const SHOOT_FWD = 1.35 // an upward flick arcs the ball FORWARD toward the hoop (the "shoot" mechanic)
 const SLEEP_VY = 0.07
 const SLEEP_VXZ = 0.05
 const SQUASH_MIN = 0.64
 const SQUASH_RECOVER = 9
 // Playable area kept INSIDE the camera's view so the ball can never roll/fly off-screen where
 // you can't grab it (the studio walls are much further out at x±7.6).
-const BOUNDS = { xMin: -3.2, xMax: 3.2, zMin: -4.3, zMax: 1.8 }
+const BOUNDS = { xMin: -2.7, xMax: 2.7, zMin: -3.8, zMax: 0.8 } // zMax kept back so the ball never looms huge near the camera
 const OOB = { yFloor: -2, xAbs: 8, zMin: -8, zMax: 4 }
 
 // Rim circle for swish detection (CALIBRATE against the moved hoop with ?debugRim / DEBUG_RIM).
-export const RIM = { x: 0, y: 2.42, z: -4.98, r: 0.3 }
+export const RIM = { x: 0, y: 2.42, z: -4.85, r: 0.36 }
 
 export interface BallControl {
   releaseDrag: () => void
@@ -84,7 +85,7 @@ export default function Basketball({
       quat: new THREE.Quaternion(),
       squash: 1,
       sleeping: false,
-      dropped: false,
+      released: false,
       scoreCooldown: 0,
       prevY: SPAWN.y,
       prevP: 0,
@@ -95,6 +96,8 @@ export default function Basketball({
       hit: new THREE.Vector3(),
       eul: new THREE.Euler(),
       dq: new THREE.Quaternion(),
+      scr: new THREE.Vector3(),
+      dbg: { sx: 0, sy: 0, wx: 0, wy: 0, wz: 0, vy: 0, speed: 0, sleeping: false, dragging: false, onScreen: false },
     }),
     []
   )
@@ -105,7 +108,7 @@ export default function Basketball({
     S.angVel.set(0, 0, 0)
     S.squash = 1
     S.sleeping = false
-    S.dropped = false
+    S.released = false // hold high again → drops + bounces when re-entered
     S.prevY = SPAWN.y
   }
 
@@ -118,17 +121,21 @@ export default function Basketball({
       const b = s[s.length - 1]
       const dt = Math.max(0.001, b.t - a.t)
       S.vel.set(((b.x - a.x) / dt) * THROW_GAIN, ((b.y - a.y) / dt) * THROW_GAIN, ((b.z - a.z) / dt) * THROW_GAIN)
+      // SHOOT — an upward flick arcs the ball FORWARD toward the hoop (a real shot) instead of just
+      // lobbing it up in the screen plane. Flick UP to score; flick sideways to dribble around.
+      if (S.vel.y > 0.6) S.vel.z -= S.vel.y * SHOOT_FWD
       if (S.vel.lengthSq() > THROW_CAP * THROW_CAP) S.vel.setLength(THROW_CAP)
     } else {
       S.vel.set(0, 0, 0) // a tap → just drop
     }
     S.drag.samples = []
-    S.dropped = true
+    S.released = true
     S.sleeping = false
   }
 
   // Imperative handle for SkyBridge (release a stranded drag on park; fresh drop on re-entry).
   useEffect(() => {
+    ;(window as unknown as { __ball?: object }).__ball = S.dbg
     if (controlRef) controlRef.current = { releaseDrag, requestReset: respawn }
     return () => {
       if (controlRef) controlRef.current = null
@@ -192,12 +199,17 @@ export default function Basketball({
         S.drag.samples.push({ x: S.pos.x, y: S.pos.y, z: S.pos.z, t: state.clock.elapsedTime })
         if (S.drag.samples.length > 6) S.drag.samples.shift()
       }
+    } else if (!S.released) {
+      // HOLD the ball up until the user actually scrolls into the finale (entrance fade lifts
+      // ~p0.06), THEN release → it drops + bounces HARD in view (you SEE the landing, not a
+      // ball that already settled off-screen during the warm-up).
+      S.pos.copy(SPAWN)
+      if (p > 0.06) {
+        S.released = true
+        S.vel.set(0, -2.5, 0)
+      }
     } else if (!S.sleeping) {
       // INTEGRATE
-      if (!S.dropped) {
-        S.vel.y = -2 // commit the first drop so the first landing bounces HARD
-        S.dropped = true
-      }
       S.vel.y += GRAV * dt
       S.vel.multiplyScalar(1 - AIR)
       S.pos.addScaledVector(S.vel, dt)
@@ -261,9 +273,9 @@ export default function Basketball({
     if (!reduced && !S.drag.active && S.meetKickCd <= 0) {
       if ((S.prevP < 0.5 && p >= 0.5) || (S.prevP > 0.5 && p <= 0.5)) {
         S.sleeping = false
-        S.dropped = true
-        S.vel.y += 3.2
-        S.vel.x += (S.pos.x >= 0 ? -1 : 1) * 1.0 // toward centre, not into the wall
+        S.released = true
+        S.vel.y += 2.2
+        S.vel.x += (S.pos.x >= 0 ? -1 : 1) * 0.8 // toward centre, not into the wall
         S.meetKickCd = 1.2
       }
     }
@@ -288,6 +300,14 @@ export default function Basketball({
       }
     }
 
+    // DEBUG (Playwright test harness) — allocation-free: mutate a persistent object.
+    S.scr.copy(S.pos).project(state.camera)
+    S.dbg.sx = (S.scr.x * 0.5 + 0.5) * window.innerWidth
+    S.dbg.sy = (-S.scr.y * 0.5 + 0.5) * window.innerHeight
+    S.dbg.wx = S.pos.x; S.dbg.wy = S.pos.y; S.dbg.wz = S.pos.z
+    S.dbg.vy = S.vel.y; S.dbg.speed = S.vel.length()
+    S.dbg.sleeping = S.sleeping; S.dbg.dragging = S.drag.active
+    S.dbg.onScreen = S.scr.z < 1 && Math.abs(S.scr.x) < 1 && Math.abs(S.scr.y) < 1
   })
 
   return (
@@ -296,7 +316,7 @@ export default function Basketball({
         <Suspense fallback={null}>
           <ModelOrFallback
             url={ASSETS.basketball}
-            normalizeTo={0.32}
+            normalizeTo={0.22}
             seat="center"
             envMapIntensity={1.0}
             emissive="#e0641e"
