@@ -137,8 +137,6 @@ export default function Basketball({
       dragAnchored: false,
       eul: new THREE.Euler(),
       dq: new THREE.Quaternion(),
-      scr: new THREE.Vector3(),
-      dbg: { sx: 0, sy: 0, wx: 0, wy: 0, wz: 0, vy: 0, speed: 0, sleeping: false, dragging: false, onScreen: false },
     }),
     []
   )
@@ -188,7 +186,6 @@ export default function Basketball({
 
   // Imperative handle for SkyBridge (release a stranded drag on park; fresh drop on re-entry).
   useEffect(() => {
-    ;(window as unknown as { __ball?: object }).__ball = S.dbg
     if (controlRef) controlRef.current = { releaseDrag, requestReset: respawn }
     return () => {
       if (controlRef) controlRef.current = null
@@ -410,15 +407,6 @@ export default function Basketball({
         ;(blob.current.material as THREE.MeshBasicMaterial).opacity = 0.62 * k
       }
     }
-
-    // DEBUG (Playwright test harness) — allocation-free: mutate a persistent object.
-    S.scr.copy(S.pos).project(state.camera)
-    S.dbg.sx = (S.scr.x * 0.5 + 0.5) * window.innerWidth
-    S.dbg.sy = (-S.scr.y * 0.5 + 0.5) * window.innerHeight
-    S.dbg.wx = S.pos.x; S.dbg.wy = S.pos.y; S.dbg.wz = S.pos.z
-    S.dbg.vy = S.vel.y; S.dbg.speed = S.vel.length()
-    S.dbg.sleeping = S.sleeping; S.dbg.dragging = S.drag.active
-    S.dbg.onScreen = S.scr.z < 1 && Math.abs(S.scr.x) < 1 && Math.abs(S.scr.y) < 1
   })
 
   return (
