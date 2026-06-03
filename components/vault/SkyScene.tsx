@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer, useGLTF } from '@react-three/drei'
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
@@ -37,7 +38,7 @@ const ringMat = new THREE.MeshStandardMaterial({ color: '#FFE4AE', emissive: '#F
 // Cool-white LED — sporty accent strips (the athletic contrast to the warm gold).
 const ledCoolMat = new THREE.MeshStandardMaterial({ color: '#EAF1FF', emissive: '#BFD4FF', emissiveIntensity: 1.8, roughness: 1, metalness: 0 })
 // Warm lit floor-pool inside the performance ring (a soft glow under the pairs).
-const poolMat = new THREE.MeshStandardMaterial({ color: '#17160F', emissive: '#6A4E22', emissiveIntensity: 0.45, roughness: 0.5, metalness: 0.2 })
+const poolMat = new THREE.MeshStandardMaterial({ color: '#17160F', emissive: '#7A5A28', emissiveIntensity: 0.7, roughness: 0.5, metalness: 0.2 })
 
 // Soft round glow sprite for the in-scene atmosphere (embers) + the meet sparks. White core → warm
 // falloff → transparent, so additive-blended points read as glowing motes, not hard dots. Built once.
@@ -169,7 +170,7 @@ function TrainingStudio() {
         {/* Dark POLISHED floor via a cheap standard material + the baked env (a faint glossy sheen),
             NOT a live MeshReflectorMaterial mirror — that re-rendered the whole scene every frame
             and was the lag. The contact shadow grounds the pairs; the env sheen keeps it premium. */}
-        <meshStandardMaterial color="#191920" metalness={0.62} roughness={0.32} envMapIntensity={0.55} />
+        <meshStandardMaterial color="#15151B" metalness={0.78} roughness={0.2} envMapIntensity={1.15} />
       </mesh>
 
       {/* CENTRE PERFORMANCE RING — a glowing gold ring inlaid flush where the pairs meet:
@@ -523,8 +524,13 @@ function Scene({
       )}
       {DEBUG_COLLIDERS && PROP_COLLIDERS.map((c, i) => <box3Helper key={i} args={[c.box, 0x39ff88]} />)}
 
-      {/* No post-composer: the Canvas is NOT `flat`, so R3F applies ACES tonemap + MSAA
-          natively (correct color + clean edges) without a per-frame full-screen pass. */}
+      {/* BLOOM — the finale is built around emissive light (the gold ring, LED strips, embers, the
+          meet sparks); real bloom is what makes them GLOW + ignite instead of just clamping to white.
+          Conservative + mipmapBlur (efficient mip chain) so a glowing scene this simple stays cheap;
+          luminanceThreshold isolates the bright emissives so the dark studio doesn't wash out. */}
+      <EffectComposer multisampling={4}>
+        <Bloom intensity={0.7} luminanceThreshold={0.7} luminanceSmoothing={0.22} mipmapBlur radius={0.78} />
+      </EffectComposer>
     </>
   )
 }
