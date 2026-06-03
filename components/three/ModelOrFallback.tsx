@@ -123,10 +123,14 @@ function LoadedModel({
     return clone
   }, [gltf.scene, normalizeTo, seat, seatScaled, scale, castShadow, material, envMapIntensity, emissive, emissiveIntensity])
 
-  // seatScaled baked the scale + the floor-seat LIFT into the clone (clone.position.y). Apply the
-  // prop's position/rotation via a WRAPPER GROUP — if we set them on the <primitive> directly,
-  // R3F would overwrite clone.position and wipe the lift, sinking the prop under the floor.
-  if (seatScaled) {
+  // normalizeTo AND seatScaled both BAKE the scale (+ a centering / floor-seat offset) into the clone
+  // itself. Passing `scale`/`position` on the <primitive> makes R3F apply them to that same object,
+  // OVERWRITING the baked transform — `scale` defaults to 1, which wiped normalizeTo and rendered the
+  // (nested-hierarchy) basketball at ~3× its intended size + poking under the floor; `position` wiped
+  // the seat lift and sank the props. So for both baked modes, apply ONLY the prop's placement
+  // (position/rotation) via a wrapper GROUP and render the primitive BARE. Plain scale-only models
+  // (e.g. the wall-mounted hoop) are NOT baked, so they still pass scale/position through normally.
+  if (normalizeTo || seatScaled) {
     return (
       <group position={position} rotation={rotation}>
         <primitive object={object} />

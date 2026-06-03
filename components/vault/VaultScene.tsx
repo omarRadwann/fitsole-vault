@@ -725,7 +725,11 @@ function HeroDisplay({ scrollProgress, reduced = false, tier }: { scrollProgress
       <group ref={shoeGroupRef} position={[0, 1.3, 0]}>
         <ModelOrFallback
           url={ASSETS.heroSneaker}
-          normalizeTo={1.05}
+          // 1.0 = this GLB's raw maxDim → preserves the exact hero size the vault shipped/was approved
+          // at. (normalizeTo was historically a NO-OP — a <primitive scale> default silently overwrote
+          // it — so every model rendered raw; that overwrite is now fixed, so this value is real. The
+          // old 1.05 never took effect; using raw 1.0 keeps the approved vault pixel-identical.)
+          normalizeTo={1.0}
           seat="center"
           castShadow
           envMapIntensity={1.3}

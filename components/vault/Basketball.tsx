@@ -33,7 +33,14 @@ export function blobTexture(): THREE.CanvasTexture {
   return _blobTex
 }
 
-const R = 0.11 // ball radius (matches normalizeTo 0.22 — much smaller, per request)
+const R = 0.17 // ball radius — MUST match the visual normalizeTo (0.34 → radius 0.17). Smaller than
+// the 1.0 hero sneakers (~1/3 their length), per the "much smaller ball" request, but still a real
+// presence you can grab + shoot. (Visual + physics radius are now locked together — see the JSX.)
+// Once settled, the ball gently FLOATS (centre at this Y) like the hero pairs — a levitating-product
+// display. This is what stops it reading "buried": at floor level (centre y=R=0.11) it sat ON the
+// bright performance ring (its glow washed the lower half → a sunken "dome") and level with the
+// sneakers that occluded it. Lifting it clear of the ring + floor reads as ON the stage, not under it.
+const BALL_FLOAT = 0.32
 const SPAWN = new THREE.Vector3(1.0, 2.5, -1.0) // mid-scene + high → drops INTO VIEW + bounces hard on enter (kept back so it doesn't loom near the camera)
 const GRAV = -10
 const REST = 0.84 // floor restitution (lively, hard bounce)
@@ -320,6 +327,13 @@ export default function Basketball({
         S.dq.setFromEuler(S.eul)
         S.quat.premultiply(S.dq).normalize()
       }
+    } else {
+      // SLEEPING — the ball has settled, so FLOAT it (centre eased toward BALL_FLOAT) with the same
+      // gentle breath as the hero pairs: it reads as a levitating product ON the stage, clear of the
+      // bright ring + floor, instead of a sphere half-sunk into them. Grab/throw clears `sleeping`
+      // (onPointerDown / meet-kick), so the moment you touch it, gravity + bounce physics resume.
+      const floatY = reduced ? BALL_FLOAT : BALL_FLOAT + Math.sin(state.clock.elapsedTime * 1.1) * 0.014
+      S.pos.y += (floatY - S.pos.y) * Math.min(1, 5 * dt)
     }
 
     // squash recovers toward round
@@ -358,15 +372,16 @@ export default function Basketball({
       const inv = 1 / Math.sqrt(S.squash)
       group.current.scale.set(inv, S.squash, inv)
     }
-    // blob shadow follows the ball; fades + shrinks with height
+    // blob shadow follows the ball; fades + shrinks with height. Strong + wide so the FLOATING ball
+    // reads as clearly grounded (a levitating product with a real shadow under it), not sunk in.
     if (blob.current) {
-      const k = clamp(1 - (S.pos.y - R) / 1.6, 0, 1)
+      const k = clamp(1 - (S.pos.y - R) / 1.8, 0, 1)
       blob.current.visible = k > 0.02 // skip the draw when the ball is high (blob invisible)
       if (blob.current.visible) {
         blob.current.position.set(S.pos.x, 0.012, S.pos.z)
-        const s = R * (1.7 - 0.6 * k)
+        const s = 0.34 * (1.3 - 0.4 * k)
         blob.current.scale.set(s, s, s)
-        ;(blob.current.material as THREE.MeshBasicMaterial).opacity = 0.36 * k
+        ;(blob.current.material as THREE.MeshBasicMaterial).opacity = 0.62 * k
       }
     }
 
@@ -386,7 +401,7 @@ export default function Basketball({
         <Suspense fallback={null}>
           <ModelOrFallback
             url={ASSETS.basketball}
-            normalizeTo={0.22}
+            normalizeTo={R * 2}
             seat="center"
             envMapIntensity={1.0}
             emissive="#e0641e"
@@ -399,9 +414,10 @@ export default function Basketball({
             }
           />
         </Suspense>
-        {/* invisible (colorWrite off) slightly-larger grab target — easy to catch a moving ball */}
+        {/* invisible (colorWrite off) larger grab target — a generous hit-sphere (≈2× the ball)
+            makes the small ball easy to catch, even while it's moving */}
         <mesh onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-          <sphereGeometry args={[0.22, 16, 12]} />
+          <sphereGeometry args={[R * 2, 16, 12]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
         </mesh>
       </group>

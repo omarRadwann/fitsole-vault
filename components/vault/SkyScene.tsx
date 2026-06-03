@@ -40,8 +40,9 @@ const ledCoolMat = new THREE.MeshStandardMaterial({ color: '#EAF1FF', emissive: 
 const poolMat = new THREE.MeshStandardMaterial({ color: '#17160F', emissive: '#6A4E22', emissiveIntensity: 0.45, roughness: 0.5, metalness: 0.2 })
 
 // The two pairs: an outer group (walk X + present yaw) → a bob group (step bounce +
-// lean-into-travel + heel-toe rock) → the model (faces inward). Believable sneaker scale
-// now (normalizeTo 0.6) so they read as real shoes on the platform, not giant props.
+// lean-into-travel + heel-toe rock) → the model (faces inward). normalizeTo 1.0 = the pairs'
+// raw export size (the hero scale that read well on the ring); both GLBs export at ~1.0 maxDim,
+// so this normalizes them to a matched 1.0 regardless of export.
 function Pair({
   url,
   faceSign,
@@ -60,7 +61,7 @@ function Pair({
         <Suspense fallback={null}>
           <ModelOrFallback
             url={url}
-            normalizeTo={0.22}
+            normalizeTo={1.0}
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
@@ -371,9 +372,10 @@ function Scene({
           now read from the baked env IBL alone (the dark room is the point — no dedicated fill). */}
       <pointLight position={[-0.5, 0.75, 1.9]} intensity={15} color="#FFE7CC" distance={6} decay={2} />
       {/* A cool fill in front of EACH locker so its door/lock face reads (the user wants them
-          visible + facing front). Short range so it lights the locker, not the whole back wall. */}
-      <pointLight position={[-2.7, 1.5, -5.5]} intensity={18} color="#C6D2EC" distance={4.2} decay={2} />
-      <pointLight position={[2.7, 1.5, -5.5]} intensity={18} color="#C6D2EC" distance={4.2} decay={2} />
+          visible + facing front). LOW intensity + WIDE range → a soft wash on the locker face, not
+          the bright spherical "egg" hotspot a close, punchy point light burned onto the glossy door. */}
+      <pointLight position={[-2.7, 1.7, -5.4]} intensity={8} color="#C6D2EC" distance={6} decay={2} />
+      <pointLight position={[2.7, 1.7, -5.4]} intensity={8} color="#C6D2EC" distance={6} decay={2} />
 
       <TrainingStudio />
 
