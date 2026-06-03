@@ -200,7 +200,7 @@ export default function SkyBridge() {
       // the moment the pairs meet lands as a held cinematic beat (pairs with the 3D key
       // swell). Gaussian, screen-blended → adds light like a real bloom. Compositor-cheap.
       if (glowRef.current) {
-        glowRef.current.style.opacity = (Math.exp(-(((p - 0.5) / 0.095) ** 2)) * 0.82).toFixed(3)
+        glowRef.current.style.opacity = (Math.exp(-(((p - 0.5) / 0.075) ** 2)) * 0.92).toFixed(3)
       }
       if (copyRef.current) {
         const fin = clamp01((p - 0.54) / 0.12)
@@ -250,7 +250,7 @@ export default function SkyBridge() {
               // so the lit hero pairs pop (the premium 'arena spotlight' look). Compositor-cheap.
               'radial-gradient(ellipse 12% 82% at 50% -8%, rgba(255,240,212,0.46), rgba(255,214,160,0.1) 34%, transparent 60%),' +
               'radial-gradient(ellipse 42% 94% at 50% -2%, rgba(255,222,172,0.15), transparent 56%),' +
-              'radial-gradient(ellipse 100% 100% at 50% 42%, transparent 44%, rgba(0,0,0,0.8) 100%)',
+              'radial-gradient(ellipse 100% 100% at 50% 42%, transparent 48%, rgba(0,0,0,0.5) 100%)',
           }}
         />
 

@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer, useGLTF } from '@react-three/drei'
-import { EffectComposer, Bloom, HueSaturation, SMAA } from '@react-three/postprocessing'
+import { EffectComposer, Bloom, HueSaturation, SMAA, Vignette, ChromaticAberration } from '@react-three/postprocessing'
+import { BlendFunction } from 'postprocessing'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
@@ -136,7 +137,7 @@ function Pair({
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
-            envMapIntensity={1.15}
+            envMapIntensity={1.3}
             fallback={
               <mesh material={fallbackMat} castShadow position={[0, 0.27, 0]}>
                 <boxGeometry args={[0.6, 0.27, 0.22]} />
@@ -170,7 +171,7 @@ function TrainingStudio() {
         {/* Dark POLISHED floor via a cheap standard material + the baked env (a faint glossy sheen),
             NOT a live MeshReflectorMaterial mirror — that re-rendered the whole scene every frame
             and was the lag. The contact shadow grounds the pairs; the env sheen keeps it premium. */}
-        <meshStandardMaterial color="#15151B" metalness={0.78} roughness={0.2} envMapIntensity={1.15} />
+        <meshStandardMaterial color="#141319" metalness={0.82} roughness={0.14} envMapIntensity={1.35} />
       </mesh>
 
       {/* CENTRE PERFORMANCE RING — a glowing gold ring inlaid flush where the pairs meet:
@@ -288,7 +289,7 @@ function Scene({
   const sparkTex = useMemo(sparkTexture, [])
   // Pre-computed unit-ish launch directions for the meet sparks (biased upward for a fountain look).
   const sparkDirs = useMemo(() => {
-    const n = 70
+    const n = 100
     const dirs = new Float32Array(n * 3)
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + (i % 3) * 0.7
@@ -337,10 +338,16 @@ function Scene({
     // finale plays like a moving broadcast shot. Pure function of scroll.
     const dive = smooth(clamp01((p - 0.86) / 0.14))
     const cx = 0, cy = 0.34, cz = -0.05 // orbit centre ≈ the ring / meeting point
-    const theta = lerp(-0.34, 0.4, smooth(p)) // a left→right arc
-    const radius = lerp(4.5, 3.4, smooth(clamp01(p / 0.7))) - dive * 0.3 - burst * 0.22 // wide push-IN on entrance → settles; a quick PUNCH-in at the meet (burst) snaps the moment closer
-    const camH = lerp(0.46, 0.62, smooth(p)) // low heroic angle, rising a touch
-    camera.position.set(cx + Math.sin(theta) * radius, camH, cz + Math.cos(theta) * radius)
+    const theta = lerp(-0.36, 0.42, smooth(p)) // a left→right arc
+    const radius = lerp(4.9, 3.3, smooth(clamp01(p / 0.7))) - dive * 0.45 - burst * 0.22 // a WIDE cinematic establishing shot → slow push-IN → a quick PUNCH at the meet (burst) → a strong final DIVE
+    const camH = lerp(0.42, 0.64, smooth(p)) // low heroic angle, rising a touch
+    // Organic CAMERA BREATH — a tiny handheld float (clock-based, frame-rate independent) so the shot
+    // feels filmed, not locked to a rail. Eased out during the final dive so the ending lands steady.
+    const breathK = reduced ? 0 : 1 - dive
+    const t0 = state.clock.elapsedTime
+    const bx = Math.sin(t0 * 0.33) * 0.045 * breathK
+    const by = Math.sin(t0 * 0.47 + 1.3) * 0.03 * breathK
+    camera.position.set(cx + Math.sin(theta) * radius + bx, camH + by, cz + Math.cos(theta) * radius)
     camera.lookAt(cx, cy + dive * 0.05, cz)
 
     // ── THE WALK + PRESENTATION TURN ───────────────────────────────────────────
@@ -380,7 +387,7 @@ function Scene({
     // gentle scale "breath" — plus a LEAP at the meet (burst). All tiny → premium, not chaotic.
     const FLOAT_H = 0.11
     const baseY = FLOAT_H + bobUp - settle
-    const leap = burst * 0.1
+    const leap = burst * 0.18 // a bigger HOP at the meet (the pairs leap as they meet)
     const spinLifeL = reduced ? 0 : Math.sin(spinAngle.current) * 0.012 * present
     const spinLifeR = reduced ? 0 : Math.sin(spinAngle.current + 1.7) * 0.012 * present
     const tumble = reduced ? 0 : Math.sin(spinAngle.current * 0.5) * 0.04 * present
@@ -404,9 +411,9 @@ function Scene({
     if (shockRef.current) {
       shockRef.current.visible = burst > 0.012 // skip the draw entirely off-meet
       if (shockRef.current.visible) {
-        const ss = lerp(0.2, 5, smooth(clamp01((p - 0.5) / 0.06)))
+        const ss = lerp(0.2, 5.6, smooth(clamp01((p - 0.5) / 0.06)))
         shockRef.current.scale.set(ss, ss, ss)
-        ;(shockRef.current.material as THREE.MeshBasicMaterial).opacity = burst * 0.85
+        ;(shockRef.current.material as THREE.MeshBasicMaterial).opacity = burst * 1.0
       }
     }
     // MEET SPARKS — a radial fountain of glowing sparks erupts from the ring centre at the meet,
@@ -440,7 +447,7 @@ function Scene({
 
       {/* Athletic IBL — a cool-white ceiling + front fill (performance-arena light) with a
           warm gold back accent (the brand). Baked once (frames=1), free per-frame. */}
-      <Environment resolution={128} frames={1}>
+      <Environment resolution={256} frames={1}>
         {/* IBL pulled WAY down — the scene must read DARK (lit only by the focused spots + the
             ring), so the ambient image light barely fills. Just enough to keep materials from
             going pure-black and to give the steel a faint cool sheen. */}
@@ -532,9 +539,15 @@ function Scene({
           luminanceThreshold isolates the bright emissives so the dark studio doesn't wash out. */}
       <EffectComposer multisampling={0}>
         <Bloom intensity={0.58} luminanceThreshold={0.72} luminanceSmoothing={0.22} mipmapBlur radius={0.8} />
-        {/* Subtle grade — a touch more saturation for richer, more premium colour. Merges into the
-            final effect pass (no extra render target), so it's essentially free on top of bloom. */}
-        <HueSaturation saturation={0.08} />
+        {/* Cinematic GRADE — all cheap fragment effects that merge into ONE pass (no extra render
+            targets), so the whole filmic look is ≈free on top of bloom:
+            · saturation lift for richer colour
+            · a soft vignette to sink the periphery into shadow + focus the eye on the lit hero (also
+              tames the over-bright feel — the light now pools on centre stage)
+            · a whisper of edge-only chromatic aberration for a premium lens character */}
+        <HueSaturation saturation={0.1} />
+        <Vignette eskil={false} offset={0.36} darkness={0.62} blendFunction={BlendFunction.NORMAL} />
+        <ChromaticAberration blendFunction={BlendFunction.NORMAL} radialModulation modulationOffset={0.45} offset={[0.0007, 0.0007]} />
         {/* SMAA — cheap post-process anti-aliasing instead of MSAA on the composer's render target
             (multisampling=0). Keeps the sneaker edges clean at a fraction of MSAA's bandwidth cost. */}
         <SMAA />
