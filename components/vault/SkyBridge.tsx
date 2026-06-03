@@ -200,7 +200,7 @@ export default function SkyBridge() {
       // the moment the pairs meet lands as a held cinematic beat (pairs with the 3D key
       // swell). Gaussian, screen-blended → adds light like a real bloom. Compositor-cheap.
       if (glowRef.current) {
-        glowRef.current.style.opacity = (Math.exp(-(((p - 0.5) / 0.09) ** 2)) * 0.6).toFixed(3)
+        glowRef.current.style.opacity = (Math.exp(-(((p - 0.5) / 0.095) ** 2)) * 0.82).toFixed(3)
       }
       if (copyRef.current) {
         const fin = clamp01((p - 0.54) / 0.12)
@@ -303,7 +303,7 @@ export default function SkyBridge() {
           ref={glowRef}
           aria-hidden
           className="absolute inset-0 pointer-events-none z-[6] mix-blend-screen"
-          style={{ opacity: 0, backgroundImage: 'radial-gradient(ellipse 55% 48% at 50% 52%, rgba(255,228,170,0.6), rgba(255,198,122,0.2) 42%, transparent 70%)' }}
+          style={{ opacity: 0, backgroundImage: 'radial-gradient(ellipse 66% 56% at 50% 50%, rgba(255,238,196,0.78), rgba(255,202,128,0.28) 40%, transparent 72%)' }}
         />
 
         {/* SWISH flash — a quick warm-gold burst when you sink a basket (driven by onScore;

@@ -39,6 +39,76 @@ const ledCoolMat = new THREE.MeshStandardMaterial({ color: '#EAF1FF', emissive: 
 // Warm lit floor-pool inside the performance ring (a soft glow under the pairs).
 const poolMat = new THREE.MeshStandardMaterial({ color: '#17160F', emissive: '#6A4E22', emissiveIntensity: 0.45, roughness: 0.5, metalness: 0.2 })
 
+// Soft round glow sprite for the in-scene atmosphere (embers) + the meet sparks. White core → warm
+// falloff → transparent, so additive-blended points read as glowing motes, not hard dots. Built once.
+let _sparkTex: THREE.CanvasTexture | null = null
+function sparkTexture(): THREE.CanvasTexture {
+  if (_sparkTex) return _sparkTex
+  const c = document.createElement('canvas')
+  c.width = c.height = 64
+  const ctx = c.getContext('2d')!
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+  g.addColorStop(0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.35, 'rgba(255,232,190,0.7)')
+  g.addColorStop(1, 'rgba(255,214,160,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 64, 64)
+  _sparkTex = new THREE.CanvasTexture(c)
+  return _sparkTex
+}
+
+// In-scene EMBERS — warm dust/embers drifting up through the spotlight (real 3D depth + parallax, vs
+// the old flat DOM motes that sat ON the glass). Additive points, ~1 draw call, JS-animated (cheap for
+// this count). Concentrated toward the lit centre so they glow in the beam and fade into the dark wings.
+function Embers({ count = 190, reduced }: { count?: number; reduced: boolean }) {
+  const ref = useRef<THREE.Points>(null)
+  const tex = useMemo(sparkTexture, [])
+  const { positions, speeds } = useMemo(() => {
+    const positions = new Float32Array(count * 3)
+    const speeds = new Float32Array(count)
+    for (let i = 0; i < count; i++) {
+      // bias x/z toward centre (sum of two randoms → triangular) so embers pool in the light
+      const bx = (Math.random() + Math.random() - 1) * 3.2
+      const bz = -2 + (Math.random() + Math.random() - 1) * 3.4
+      positions[i * 3] = bx
+      positions[i * 3 + 1] = Math.random() * 5.0
+      positions[i * 3 + 2] = bz
+      speeds[i] = 0.07 + Math.random() * 0.14
+    }
+    return { positions, speeds }
+  }, [count])
+  useFrame((_, delta) => {
+    if (reduced) return
+    const g = ref.current?.geometry
+    if (!g) return
+    const dt = Math.min(delta, 0.05)
+    const arr = g.attributes.position.array as Float32Array
+    for (let i = 0; i < count; i++) {
+      let y = arr[i * 3 + 1] + speeds[i] * dt
+      if (y > 5.0) y = 0
+      arr[i * 3 + 1] = y
+    }
+    g.attributes.position.needsUpdate = true
+  })
+  return (
+    <points ref={ref} renderOrder={4}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        map={tex}
+        size={0.05}
+        sizeAttenuation
+        transparent
+        opacity={0.45}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        color="#FFD9A0"
+      />
+    </points>
+  )
+}
+
 // The two pairs: an outer group (walk X + present yaw) → a bob group (step bounce +
 // lean-into-travel + heel-toe rock) → the model (faces inward). normalizeTo 1.0 = the pairs'
 // raw export size (the hero scale that read well on the ring); both GLBs export at ~1.0 maxDim,
@@ -65,7 +135,7 @@ function Pair({
             seat="bottom"
             rotation={[0, face, 0]}
             castShadow
-            envMapIntensity={0.88}
+            envMapIntensity={1.15}
             fallback={
               <mesh material={fallbackMat} castShadow position={[0, 0.27, 0]}>
                 <boxGeometry args={[0.6, 0.27, 0.22]} />
@@ -213,6 +283,23 @@ function Scene({
   const spinAngle = useRef(0)
   const spinVel = useRef(0)
   const shockRef = useRef<THREE.Mesh>(null) // gold meet shockwave ring
+  const sparksRef = useRef<THREE.Points>(null) // radial spark burst at the meet
+  const sparkTex = useMemo(sparkTexture, [])
+  // Pre-computed unit-ish launch directions for the meet sparks (biased upward for a fountain look).
+  const sparkDirs = useMemo(() => {
+    const n = 70
+    const dirs = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + (i % 3) * 0.7
+      const up = 0.5 + Math.random() * 1.3
+      const r = 0.7 + Math.random() * 0.5
+      dirs[i * 3] = Math.cos(a) * r
+      dirs[i * 3 + 1] = up
+      dirs[i * 3 + 2] = Math.sin(a) * r
+    }
+    return dirs
+  }, [])
+  const sparkPos = useMemo(() => new Float32Array(sparkDirs.length), [sparkDirs])
   const { invalidate } = useThree()
 
   // Render once on mount; invalidateRef kept for SkyBridge (harmless under "always").
@@ -250,7 +337,7 @@ function Scene({
     const dive = smooth(clamp01((p - 0.86) / 0.14))
     const cx = 0, cy = 0.34, cz = -0.05 // orbit centre ≈ the ring / meeting point
     const theta = lerp(-0.34, 0.4, smooth(p)) // a left→right arc
-    const radius = lerp(4.5, 3.4, smooth(clamp01(p / 0.7))) - dive * 0.3 // starts wide (cinematic push-IN on entrance) → settles; small pairs + ball read as compact pieces in a vast dark space
+    const radius = lerp(4.5, 3.4, smooth(clamp01(p / 0.7))) - dive * 0.3 - burst * 0.22 // wide push-IN on entrance → settles; a quick PUNCH-in at the meet (burst) snaps the moment closer
     const camH = lerp(0.46, 0.62, smooth(p)) // low heroic angle, rising a touch
     camera.position.set(cx + Math.sin(theta) * radius, camH, cz + Math.cos(theta) * radius)
     camera.lookAt(cx, cy + dive * 0.05, cz)
@@ -308,7 +395,7 @@ function Scene({
     // is boosted extra so the darker olive runner reads as premium as the brighter teal pair.
     if (keyRef.current) keyRef.current.intensity = 44 + glow * 32
     if (key2Ref.current) key2Ref.current.intensity = 36 + glow * 26
-    ringMat.emissiveIntensity = 1.9 + glow * 4.8 + burst * 6
+    ringMat.emissiveIntensity = 1.9 + glow * 4.8 + burst * 11 // ignite HARDER at the meet (the wow flash)
     // Gold SHOCKWAVE — a flat ring bursts outward across the floor at the meet. Pure function of
     // p (deterministic → replays cleanly on scroll back/forth); near-zero cost (1 draw, ~6% of scroll).
     if (shockRef.current) {
@@ -317,6 +404,28 @@ function Scene({
         const ss = lerp(0.2, 5, smooth(clamp01((p - 0.5) / 0.06)))
         shockRef.current.scale.set(ss, ss, ss)
         ;(shockRef.current.material as THREE.MeshBasicMaterial).opacity = burst * 0.85
+      }
+    }
+    // MEET SPARKS — a radial fountain of glowing sparks erupts from the ring centre at the meet,
+    // launched outward + up by `burst` then arcing back. Pure function of p (deterministic on
+    // scroll-back), one additive draw, only drawn during the ~6% of scroll around 0.5.
+    if (sparksRef.current) {
+      sparksRef.current.visible = burst > 0.02
+      if (sparksRef.current.visible) {
+        // Expand FAST (over ~5% of scroll) + WIDE + HIGH so the fountain clears the sneakers while the
+        // burst is still bright (it was bunched at centre + occluded when brightest before).
+        const prog = smooth(clamp01((p - 0.5) / 0.05))
+        const reach = prog * 3.3
+        const arr = sparkPos
+        for (let i = 0; i < arr.length; i += 3) {
+          arr[i] = sparkDirs[i] * reach
+          arr[i + 1] = sparkDirs[i + 1] * reach * 1.35 - prog * prog * 1.5 // shoot UP past the pairs, then arc
+          arr[i + 2] = sparkDirs[i + 2] * reach
+        }
+        const geo = sparksRef.current.geometry
+        geo.attributes.position.needsUpdate = true
+        ;(sparksRef.current.material as THREE.PointsMaterial).opacity = burst * 0.95
+        ;(sparksRef.current.material as THREE.PointsMaterial).size = 0.06 + burst * 0.07
       }
     }
   })
@@ -390,6 +499,17 @@ function Scene({
         <ringGeometry args={[0.86, 1.0, 64]} />
         <meshBasicMaterial color="#FFD27A" transparent opacity={0} depthWrite={false} />
       </mesh>
+
+      {/* Meet SPARKS — a radial fountain of glowing embers erupting from the ring at the meet (driven above). */}
+      <points ref={sparksRef} position={[0, 0.1, 0]} visible={false} renderOrder={5}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[sparkPos, 3]} />
+        </bufferGeometry>
+        <pointsMaterial map={sparkTex} size={0.05} sizeAttenuation transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} color="#FFE2A6" />
+      </points>
+
+      {/* In-scene warm embers drifting up through the spotlight — real 3D atmosphere + depth. */}
+      <Embers reduced={reduced} />
 
       {/* Interactive basketball — grab / drag / throw, bounces hard, sink it through the hoop. */}
       <Basketball reduced={reduced} scrollProgress={scrollProgress} controlRef={ballControlRef} onScore={onScore} />
