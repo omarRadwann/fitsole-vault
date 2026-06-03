@@ -139,11 +139,15 @@ function Pair({
   faceSign,
   outerRef,
   bobRef,
+  reflection = false,
 }: {
   url: string
   faceSign: number
   outerRef: React.RefObject<THREE.Group | null>
   bobRef: React.RefObject<THREE.Group | null>
+  // The mirror copy (rendered inside a scale.y=-1 group, under the glass floor) — no contact shadow,
+  // no shadow casting; its transforms are driven each frame to match the real pair (see useFrame).
+  reflection?: boolean
 }) {
   const face = faceSign > 0 ? -Math.PI / 2 : Math.PI / 2
   return (
@@ -155,22 +159,25 @@ function Pair({
             normalizeTo={1.0}
             seat="bottom"
             rotation={[0, face, 0]}
-            castShadow
+            castShadow={!reflection}
             envMapIntensity={1.3}
             fallback={
-              <mesh material={fallbackMat} castShadow position={[0, 0.27, 0]}>
+              <mesh material={fallbackMat} castShadow={!reflection} position={[0, 0.27, 0]}>
                 <boxGeometry args={[0.6, 0.27, 0.22]} />
               </mesh>
             }
           />
         </Suspense>
       </group>
-      {/* Soft drop shadow under the pair — a cheap textured blob. As a child of the OUTER group it
-          follows the walk-in x + the spin automatically, and stays on the floor while the bob floats. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} scale={[0.42, 0.24, 1]} renderOrder={2}>
-        <circleGeometry args={[1, 32]} />
-        <meshBasicMaterial map={blobTexture()} transparent opacity={0.5} depthWrite={false} />
-      </mesh>
+      {/* Soft contact darkening under the pair (a cheap textured blob). Now that the glass floor casts
+          a real REFLECTION below each pair, this is dialled down to a faint ambient-occlusion touch — a
+          strong dark blob would fight the reflection. Skipped entirely on the mirror copy. */}
+      {!reflection && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} scale={[0.4, 0.22, 1]} renderOrder={2}>
+          <circleGeometry args={[1, 32]} />
+          <meshBasicMaterial map={blobTexture()} transparent opacity={0.28} depthWrite={false} />
+        </mesh>
+      )}
     </group>
   )
 }
@@ -190,7 +197,11 @@ function TrainingStudio() {
         {/* Dark POLISHED floor via a cheap standard material + the baked env (a faint glossy sheen),
             NOT a live MeshReflectorMaterial mirror — that re-rendered the whole scene every frame
             and was the lag. The contact shadow grounds the pairs; the env sheen keeps it premium. */}
-        <meshStandardMaterial color="#141319" metalness={0.82} roughness={0.14} envMapIntensity={1.35} />
+        {/* Semi-transparent so the mirrored pairs below read THROUGH it as a real reflection (dimmed
+            to ~28% → a subtle premium reflection, not a ghost second object). Keeps its glossy env
+            sheen on top. depthWrite stays on (solid plane) — the mirror pairs are opaque + render
+            first, the transparent floor blends over them. */}
+        <meshStandardMaterial color="#141319" metalness={0.82} roughness={0.14} envMapIntensity={1.35} transparent opacity={0.72} />
       </mesh>
 
       {/* CENTRE PERFORMANCE RING — a glowing gold ring inlaid flush where the pairs meet:
@@ -295,6 +306,11 @@ function Scene({
   const lBob = useRef<THREE.Group>(null)
   const rOuter = useRef<THREE.Group>(null)
   const rBob = useRef<THREE.Group>(null)
+  // Mirror copies (rendered in a scale.y=-1 group below the glass floor) for the real floor reflection.
+  const mLOuter = useRef<THREE.Group>(null)
+  const mLBob = useRef<THREE.Group>(null)
+  const mROuter = useRef<THREE.Group>(null)
+  const mRBob = useRef<THREE.Group>(null)
   const keyRef = useRef<THREE.SpotLight>(null)
   const key2Ref = useRef<THREE.SpotLight>(null)
   const spotTarget = useMemo(() => new THREE.Object3D(), [])
@@ -416,6 +432,12 @@ function Scene({
     if (rOuter.current) { rOuter.current.position.x = rx; rOuter.current.rotation.y = -turn }
     if (lBob.current) { lBob.current.position.y = Math.max(0.07, baseY + floatL + leap + spinLifeL); lBob.current.rotation.z = -lean; lBob.current.rotation.x = rock + tilt + tumble; lBob.current.scale.setScalar(breathL) }
     if (rBob.current) { rBob.current.position.y = Math.max(0.07, baseY + floatR + leap + spinLifeR); rBob.current.rotation.z = lean; rBob.current.rotation.x = -rock - tilt - tumble; rBob.current.scale.setScalar(breathR) }
+    // Drive the REFLECTION copies to match the live pairs (the scale.y=-1 parent flips them below the
+    // floor). Copy the full local transforms of both the outer (walk/spin) + bob (float/lean/breath) groups.
+    if (mLOuter.current && lOuter.current) { mLOuter.current.position.copy(lOuter.current.position); mLOuter.current.rotation.copy(lOuter.current.rotation) }
+    if (mROuter.current && rOuter.current) { mROuter.current.position.copy(rOuter.current.position); mROuter.current.rotation.copy(rOuter.current.rotation) }
+    if (mLBob.current && lBob.current) { mLBob.current.position.copy(lBob.current.position); mLBob.current.rotation.copy(lBob.current.rotation); mLBob.current.scale.copy(lBob.current.scale) }
+    if (mRBob.current && rBob.current) { mRBob.current.position.copy(rBob.current.position); mRBob.current.rotation.copy(rBob.current.rotation); mRBob.current.scale.copy(rBob.current.scale) }
 
     // ── THE MEET "REVEAL" ─────────────────────────────────────────────────────
     // At the meet (p≈0.5) the two performance spots SWELL and the gold ring IGNITES hard
@@ -522,6 +544,15 @@ function Scene({
 
       <Pair url={ASSETS.blackRunner} faceSign={1} outerRef={lOuter} bobRef={lBob} />
       <Pair url={ASSETS.ae1} faceSign={-1} outerRef={rOuter} bobRef={rBob} />
+
+      {/* FLOOR REFLECTION — mirror copies of the pairs in a scale.y=-1 group (reflected about the floor
+          plane y=0), driven each frame to match the real pairs (see useFrame). Seen THROUGH the
+          semi-transparent glass floor → a true reflection of the hero product (the premium signature
+          a glossy env-only floor couldn't give). 2 extra draws, no extra render pass. */}
+      <group scale={[1, -1, 1]}>
+        <Pair url={ASSETS.blackRunner} faceSign={1} outerRef={mLOuter} bobRef={mLBob} reflection />
+        <Pair url={ASSETS.ae1} faceSign={-1} outerRef={mROuter} bobRef={mRBob} reflection />
+      </group>
 
       {/* Gold meet SHOCKWAVE — a flat ring that bursts outward across the floor at p≈0.5 (driven above). */}
       <mesh ref={shockRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} renderOrder={3}>
