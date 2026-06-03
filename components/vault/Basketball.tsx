@@ -43,14 +43,19 @@ const R = 0.17 // ball radius — MUST match the visual normalizeTo (0.34 → ra
 const BALL_FLOAT = 0.32
 const SPAWN = new THREE.Vector3(1.0, 2.5, -1.0) // mid-scene + high → drops INTO VIEW + bounces hard on enter (kept back so it doesn't loom near the camera)
 const GRAV = -10
-const REST = 0.84 // floor restitution (lively, hard bounce)
+const REST = 0.78 // floor restitution — lively but settles in a few bounces (0.84 felt pinball-y/endless)
 const REST_WALL = 0.6
 const AIR = 0.01
 const ROLL_FRICTION = 1.5
 const MAX_SPEED = 14
 const THROW_GAIN = 1.9
-const THROW_CAP = 10.5 // capped so even a hard flick reaches ~rim height, never flies off-screen
-const SHOOT_FWD = 0.85 // up-flick arcs FORWARD toward the hoop — tuned so the arc reaches rim HEIGHT, not a flat liner
+const THROW_CAP = 11 // capped so even a hard flick reaches ~rim height, never flies off-screen
+// SHOOT: a clear up-flick (vel.y > SHOOT_VY) is a SHOT — we SET the velocity to the exact BALLISTIC
+// solution that lands the ball in the rim (NOT a blend: blending changed the horizontal speed, so the
+// real flight time drifted from the one the vertical solve assumed → the ball sailed over the rim).
+// Flick STRENGTH still shapes the arc (via flight time T); a softer / sideways flick (vy below the
+// threshold) just dribbles freely. "Flick up = swish" from anywhere on the court — a game, not a sim.
+const SHOOT_VY = 1.2
 const SLEEP_VY = 0.07
 const SLEEP_VXZ = 0.05
 const SQUASH_MIN = 0.64
@@ -153,10 +158,22 @@ export default function Basketball({
       const b = s[s.length - 1]
       const dt = Math.max(0.001, b.t - a.t)
       S.vel.set(((b.x - a.x) / dt) * THROW_GAIN, ((b.y - a.y) / dt) * THROW_GAIN, ((b.z - a.z) / dt) * THROW_GAIN)
-      // SHOOT — an upward flick arcs the ball FORWARD toward the hoop (a real shot) instead of just
-      // lobbing it up in the screen plane. Flick UP to score; flick sideways to dribble around.
-      if (S.vel.y > 0.6) S.vel.z -= S.vel.y * SHOOT_FWD
-      if (S.vel.lengthSq() > THROW_CAP * THROW_CAP) S.vel.setLength(THROW_CAP)
+      if (S.vel.y > SHOOT_VY) {
+        // SHOOT — set the EXACT ballistic velocity that lands the ball in the rim. Pick the flight
+        // time T from the flick strength (harder up-flick → shorter, flatter, faster shot), then solve
+        // v = Δ/T for x,z and v = Δ/T − ½·g·T for y. Horizontal + vertical stay consistent → a true
+        // swish (no over-the-rim sail). Not capped: the solution is naturally bounded (~9 u/s).
+        const T = clamp(0.95 - (S.vel.y - SHOOT_VY) * 0.03, 0.6, 0.95)
+        // Drag compensation: the integrator applies AIR per frame, so over the flight the ball loses
+        // speed and a no-drag ballistic undershoots (more on long shots). Boost the launch velocity by
+        // the average drag loss (~half the flight's frames) so the ball still reaches the rim.
+        const comp = 1 / Math.pow(1 - AIR, 30 * T)
+        S.vel.x = ((RIM.x - S.pos.x) / T) * comp
+        S.vel.z = ((RIM.z - S.pos.z) / T) * comp
+        S.vel.y = ((RIM.y - S.pos.y) / T + 0.5 * -GRAV * T) * comp
+      } else if (S.vel.lengthSq() > THROW_CAP * THROW_CAP) {
+        S.vel.setLength(THROW_CAP) // cap only free throws/dribbles; shots are the bounded ballistic above
+      }
     } else {
       S.vel.set(0, 0, 0) // a tap → just drop
     }
@@ -232,7 +249,8 @@ export default function Basketball({
           Math.max(S.hit.y, R),
           clamp(S.hit.z, BOUNDS.zMin, BOUNDS.zMax)
         )
-        S.pos.lerp(S.target, 1 - Math.exp(-22 * dt)) // frame-rate-independent glide toward the cursor
+        S.pos.lerp(S.target, 1 - Math.exp(-70 * dt)) // frame-rate-independent, TIGHT tracking (was 22 →
+        // floaty/laggy: the ball trailed the cursor; 70 sticks it to the cursor while still de-jittering)
         S.drag.samples.push({ x: S.target.x, y: S.target.y, z: S.target.z, t: state.clock.elapsedTime })
         if (S.drag.samples.length > 6) S.drag.samples.shift()
       }
