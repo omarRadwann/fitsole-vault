@@ -43,18 +43,40 @@ const ROLL_FRICTION = 1.5
 const MAX_SPEED = 14
 const THROW_GAIN = 1.9
 const THROW_CAP = 10.5 // capped so even a hard flick reaches ~rim height, never flies off-screen
-const SHOOT_FWD = 1.35 // an upward flick arcs the ball FORWARD toward the hoop (the "shoot" mechanic)
+const SHOOT_FWD = 0.85 // up-flick arcs FORWARD toward the hoop — tuned so the arc reaches rim HEIGHT, not a flat liner
 const SLEEP_VY = 0.07
 const SLEEP_VXZ = 0.05
 const SQUASH_MIN = 0.64
 const SQUASH_RECOVER = 9
 // Playable area kept INSIDE the camera's view so the ball can never roll/fly off-screen where
 // you can't grab it (the studio walls are much further out at x±7.6).
-const BOUNDS = { xMin: -2.7, xMax: 2.7, zMin: -3.8, zMax: 0.8 } // zMax kept back so the ball never looms huge near the camera
+// zMax is BEHIND the sneakers (z0) so they always render in front; zMin reaches past the rim
+// (z-4.85) so you can actually shoot it into the hoop. Floor + these 4 walls + CEIL = fully enclosed.
+const BOUNDS = { xMin: -2.7, xMax: 2.7, zMin: -5.5, zMax: -0.15 }
+const CEIL = 3.7 // hard ceiling (above the backboard ~3.45) → the ball can NEVER fly off-screen / vanish
 const OOB = { yFloor: -2, xAbs: 8, zMin: -8, zMax: 4 }
 
 // Rim circle for swish detection (CALIBRATE against the moved hoop with ?debugRim / DEBUG_RIM).
 export const RIM = { x: 0, y: 2.42, z: -4.85, r: 0.36 }
+
+// Solid props the ball BOUNCES off (hand-rolled sphere↔AABB). World-space boxes (centre ± half) +
+// restitution. The backboard box sits ABOVE + behind the rim so a swish drops UNDER it but a long /
+// flat shot bounces. The lockers (z≈-6) are behind the ball's reach, so they need no collider.
+// Calibrate with DEBUG_COLLIDERS (a wireframe box per entry).
+export const PROP_COLLIDERS = (
+  [
+    { c: [-3.05, 0.46, -2.7], h: [0.85, 0.5, 0.5], rest: 0.5 }, // bench (yaw-rotated → widened)
+    { c: [3.05, 0.95, -2.9], h: [0.6, 0.95, 0.5], rest: 0.5 }, // ball rack (widened)
+    { c: [0, 3.0, -5.35], h: [0.6, 0.45, 0.12], rest: 0.7 }, // hoop backboard (swish passes UNDER)
+    { c: [0, 0.2, 0], h: [0.7, 0.35, 0.4], rest: 0.55 }, // the hero sneakers' footprint
+  ] as const
+).map((p) => ({
+  box: new THREE.Box3(
+    new THREE.Vector3(p.c[0] - p.h[0], p.c[1] - p.h[1], p.c[2] - p.h[2]),
+    new THREE.Vector3(p.c[0] + p.h[0], p.c[1] + p.h[1], p.c[2] + p.h[2])
+  ),
+  rest: p.rest,
+}))
 
 export interface BallControl {
   releaseDrag: () => void
@@ -94,6 +116,9 @@ export default function Basketball({
       plane: new THREE.Plane(),
       camFwd: new THREE.Vector3(),
       hit: new THREE.Vector3(),
+      target: new THREE.Vector3(),
+      dragAnchor: new THREE.Vector3(),
+      dragAnchored: false,
       eul: new THREE.Euler(),
       dq: new THREE.Quaternion(),
       scr: new THREE.Vector3(),
@@ -165,6 +190,7 @@ export default function Basketball({
       /* ignore */
     }
     S.drag.active = true
+    S.dragAnchored = false // re-anchor the drag plane at the ball's current depth this grab
     S.drag.samples = []
     S.sleeping = false
     S.vel.set(0, 0, 0)
@@ -186,55 +212,100 @@ export default function Basketball({
     if (S.scoreCooldown > 0) S.scoreCooldown -= dt
 
     if (S.drag.active) {
-      // DRAG — project the pointer onto a plane through the ball facing the (orbiting) camera.
+      // DRAG — project the pointer onto a camera-facing plane anchored at the ball's depth WHEN the
+      // grab began (not the lagging ball → no smoothing feedback). SMOOTH the rendered position
+      // toward the cursor; sample the RAW target so the throw stays crisp (smooth visual, snappy flick).
       state.camera.getWorldDirection(S.camFwd)
-      S.plane.setFromNormalAndCoplanarPoint(S.camFwd, S.pos)
+      if (!S.dragAnchored) { S.dragAnchor.copy(S.pos); S.dragAnchored = true }
+      S.plane.setFromNormalAndCoplanarPoint(S.camFwd, S.dragAnchor)
       state.raycaster.setFromCamera(state.pointer, state.camera)
       if (state.raycaster.ray.intersectPlane(S.plane, S.hit)) {
-        S.pos.set(
+        S.target.set(
           clamp(S.hit.x, BOUNDS.xMin, BOUNDS.xMax),
           Math.max(S.hit.y, R),
           clamp(S.hit.z, BOUNDS.zMin, BOUNDS.zMax)
         )
-        S.drag.samples.push({ x: S.pos.x, y: S.pos.y, z: S.pos.z, t: state.clock.elapsedTime })
+        S.pos.lerp(S.target, 1 - Math.exp(-22 * dt)) // frame-rate-independent glide toward the cursor
+        S.drag.samples.push({ x: S.target.x, y: S.target.y, z: S.target.z, t: state.clock.elapsedTime })
         if (S.drag.samples.length > 6) S.drag.samples.shift()
       }
     } else if (!S.released) {
-      // HOLD the ball up until the user actually scrolls into the finale (entrance fade lifts
-      // ~p0.06), THEN release → it drops + bounces HARD in view (you SEE the landing, not a
-      // ball that already settled off-screen during the warm-up).
+      // HOLD the ball up until the user actually scrolls into the finale (~p0.06), THEN release →
+      // it drops + bounces HARD in view (you SEE the landing, not a ball that settled off-screen).
       S.pos.copy(SPAWN)
       if (p > 0.06) {
         S.released = true
         S.vel.set(0, -2.5, 0)
       }
     } else if (!S.sleeping) {
-      // INTEGRATE
-      S.vel.y += GRAV * dt
-      S.vel.multiplyScalar(1 - AIR)
-      S.pos.addScaledVector(S.vel, dt)
-
-      // floor
-      if (S.pos.y < R) {
-        S.pos.y = R
-        if (S.vel.y < 0) {
-          const impact = -S.vel.y
-          S.vel.y = impact * REST
-          S.squash = clamp(1 - (impact / 8) * (1 - SQUASH_MIN), SQUASH_MIN, 1)
+      // INTEGRATE with SUBSTEPS — dt is clamped to 0.05, so a fast ball moves up to ~0.7/frame and
+      // would TUNNEL through thin colliders. Substep so each move ≤ R/2; floor / walls / ceiling /
+      // props all resolve inside the loop. (AIR drag, sleep, OOB, spin stay once-per-frame, below.)
+      const steps = Math.min(8, Math.max(1, Math.ceil((S.vel.length() * dt) / (R * 0.5))))
+      const h = dt / steps
+      for (let i = 0; i < steps; i++) {
+        S.vel.y += GRAV * h
+        S.pos.addScaledVector(S.vel, h)
+        // floor
+        if (S.pos.y < R) {
+          S.pos.y = R
+          if (S.vel.y < 0) {
+            const impact = -S.vel.y
+            S.vel.y = impact * REST
+            S.squash = clamp(1 - (impact / 8) * (1 - SQUASH_MIN), SQUASH_MIN, 1)
+          }
+          const f = Math.max(0, 1 - ROLL_FRICTION * h)
+          S.vel.x *= f
+          S.vel.z *= f
         }
-        const f = Math.max(0, 1 - ROLL_FRICTION * dt)
-        S.vel.x *= f
-        S.vel.z *= f
+        // ceiling (full enclosure → the ball can never fly off the top + vanish)
+        if (S.pos.y > CEIL && S.vel.y > 0) { S.pos.y = CEIL; S.vel.y = -S.vel.y * REST_WALL }
+        // walls
+        if (S.pos.x < BOUNDS.xMin) { S.pos.x = BOUNDS.xMin; if (S.vel.x < 0) S.vel.x = -S.vel.x * REST_WALL }
+        if (S.pos.x > BOUNDS.xMax) { S.pos.x = BOUNDS.xMax; if (S.vel.x > 0) S.vel.x = -S.vel.x * REST_WALL }
+        if (S.pos.z < BOUNDS.zMin) { S.pos.z = BOUNDS.zMin; if (S.vel.z < 0) S.vel.z = -S.vel.z * REST_WALL }
+        if (S.pos.z > BOUNDS.zMax) { S.pos.z = BOUNDS.zMax; if (S.vel.z > 0) S.vel.z = -S.vel.z * REST_WALL }
+        // PROP collision — sphere ↔ AABB; bounce off bench / rack / backboard / sneakers. 2 passes
+        // resolve corners / overlapping boxes.
+        for (let pass = 0; pass < 2; pass++) {
+          let any = false
+          for (let ci = 0; ci < PROP_COLLIDERS.length; ci++) {
+            const b = PROP_COLLIDERS[ci].box
+            const cx = clamp(S.pos.x, b.min.x, b.max.x)
+            const cy = clamp(S.pos.y, b.min.y, b.max.y)
+            const cz = clamp(S.pos.z, b.min.z, b.max.z)
+            let nx = S.pos.x - cx, ny = S.pos.y - cy, nz = S.pos.z - cz
+            const d2 = nx * nx + ny * ny + nz * nz
+            if (d2 >= R * R) continue
+            any = true
+            const d = Math.sqrt(d2)
+            if (d > 1e-6) {
+              const inv = 1 / d; nx *= inv; ny *= inv; nz *= inv
+              const push = R - d
+              S.pos.x += nx * push; S.pos.y += ny * push; S.pos.z += nz * push
+            } else {
+              // centre inside the box → eject along the least-penetration axis
+              const dxl = S.pos.x - b.min.x, dxr = b.max.x - S.pos.x
+              const dyl = S.pos.y - b.min.y, dyr = b.max.y - S.pos.y
+              const dzl = S.pos.z - b.min.z, dzr = b.max.z - S.pos.z
+              const mx = Math.min(dxl, dxr), my = Math.min(dyl, dyr), mz = Math.min(dzl, dzr)
+              nx = 0; ny = 0; nz = 0
+              if (mx <= my && mx <= mz) { nx = dxl < dxr ? -1 : 1; S.pos.x += nx * (mx + R) }
+              else if (my <= mz) { ny = dyl < dyr ? -1 : 1; S.pos.y += ny * (my + R) }
+              else { nz = dzl < dzr ? -1 : 1; S.pos.z += nz * (mz + R) }
+            }
+            const vn = S.vel.x * nx + S.vel.y * ny + S.vel.z * nz
+            if (vn < 0) {
+              const j = (1 + PROP_COLLIDERS[ci].rest) * vn
+              S.vel.x -= j * nx; S.vel.y -= j * ny; S.vel.z -= j * nz
+            }
+          }
+          if (!any) break
+        }
       }
-      // walls
-      if (S.pos.x < BOUNDS.xMin) { S.pos.x = BOUNDS.xMin; if (S.vel.x < 0) S.vel.x = -S.vel.x * REST_WALL }
-      if (S.pos.x > BOUNDS.xMax) { S.pos.x = BOUNDS.xMax; if (S.vel.x > 0) S.vel.x = -S.vel.x * REST_WALL }
-      if (S.pos.z < BOUNDS.zMin) { S.pos.z = BOUNDS.zMin; if (S.vel.z < 0) S.vel.z = -S.vel.z * REST_WALL }
-      if (S.pos.z > BOUNDS.zMax) { S.pos.z = BOUNDS.zMax; if (S.vel.z > 0) S.vel.z = -S.vel.z * REST_WALL }
-
+      // once per frame
+      S.vel.multiplyScalar(1 - AIR)
       if (S.vel.lengthSq() > MAX_SPEED * MAX_SPEED) S.vel.setLength(MAX_SPEED)
-
-      // sleep (no perpetual micro-bounces)
       if (S.pos.y <= R + 0.006 && Math.abs(S.vel.y) < SLEEP_VY && Math.hypot(S.vel.x, S.vel.z) < SLEEP_VXZ) {
         S.pos.y = R
         S.vel.set(0, 0, 0)
@@ -242,7 +313,6 @@ export default function Basketball({
         S.sleeping = true
       }
       if (S.pos.y < OOB.yFloor || Math.abs(S.pos.x) > OOB.xAbs || S.pos.z < OOB.zMin || S.pos.z > OOB.zMax) respawn()
-
       // rolling-without-slip spin from horizontal velocity
       S.angVel.set(S.vel.z / R, 0, -S.vel.x / R)
       if (S.angVel.lengthSq() > 1e-6) {

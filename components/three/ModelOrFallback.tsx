@@ -37,6 +37,9 @@ interface LoadedModelProps {
   normalizeTo?: number
   // Where to anchor the normalized model: sitting on the floor or centered.
   seat?: 'bottom' | 'center'
+  // Seat a SCALE-only model (no normalizeTo) on the floor: bake the scale, then lift so the lowest
+  // vertex sits at y=0 (preserving x/z). Opt-in so wall-mounted props (e.g. the hoop) still hang.
+  seatScaled?: boolean
   // Cast shadows from every mesh (hero only — perf cost not justified elsewhere).
   castShadow?: boolean
   // Replace every mesh's material with this shared one (matte-clay treatment for
@@ -59,6 +62,7 @@ function LoadedModel({
   rotation,
   normalizeTo,
   seat = 'bottom',
+  seatScaled = false,
   castShadow = false,
   material,
   envMapIntensity,
@@ -85,6 +89,13 @@ function LoadedModel({
       clone.position.x -= center.x
       clone.position.z -= center.z
       clone.position.y -= seat === 'bottom' ? box2.min.y : center.y
+    } else if (seatScaled) {
+      // Seat a SCALE-only model on the floor: bake the scale into the clone, then lift its lowest
+      // vertex to y=0 (keep x/z — props are explicitly positioned). Fixes props sinking under the floor.
+      if (Array.isArray(scale)) clone.scale.set(scale[0], scale[1], scale[2])
+      else clone.scale.setScalar(scale)
+      const box = new THREE.Box3().setFromObject(clone)
+      clone.position.y -= box.min.y
     }
 
     if (castShadow || material || envMapIntensity !== undefined || emissive !== undefined) {
@@ -110,9 +121,10 @@ function LoadedModel({
     }
 
     return clone
-  }, [gltf.scene, normalizeTo, seat, castShadow, material, envMapIntensity])
+  }, [gltf.scene, normalizeTo, seat, seatScaled, scale, castShadow, material, envMapIntensity, emissive, emissiveIntensity])
 
-  return <primitive object={object} scale={scale} position={position} rotation={rotation} />
+  // When seatScaled baked the scale into the clone, don't re-apply it on the primitive.
+  return <primitive object={object} scale={seatScaled ? undefined : scale} position={position} rotation={rotation} />
 }
 
 interface ModelOrFallbackProps extends LoadedModelProps {

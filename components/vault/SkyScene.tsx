@@ -6,11 +6,15 @@ import { Environment, Lightformer, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
-import Basketball, { RIM, blobTexture, type BallControl } from './Basketball'
+import Basketball, { RIM, PROP_COLLIDERS, blobTexture, type BallControl } from './Basketball'
 
-// Flip to true (or wire to ?debugRim) to show a wireframe torus at the swish RIM circle while
-// calibrating the moved hoop, then set back to false.
+// Flip to true while calibrating: DEBUG_RIM shows a torus at the swish circle; DEBUG_COLLIDERS shows
+// a wireframe box for each prop collider. Set both false for production.
 const DEBUG_RIM = false
+const DEBUG_COLLIDERS = false
+// Locker yaw so the doors/locks face the camera (+z). Calibrated by capture — the GLB faces -z by
+// default, so PI turns the door toward the viewer. (Try 0 / ±PI/2 if a capture shows otherwise.)
+const LOCKER_YAW = Math.PI
 import { isIntegratedGpu, readGpuRenderer } from '@/lib/deviceTier'
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
@@ -169,11 +173,14 @@ function TrainingStudio() {
             bag — fewer, aligned props read clean, not "messy"): the hoop centred high, two lockers
             flanking it square on the back wall, and a bench (left) mirrored by the ball rack (right).
             Everything sits OUTSIDE the ball's playable area so the game stays clear. */}
+        {/* Hoop stays unseated (wall-mounted, hangs at y2.7). The floor props use seatScaled +
+            position.y=0 so their lowest vertex sits exactly on the floor (no more sinking). Lockers
+            rotated so the doors/locks face the viewer (LOCKER_YAW). */}
         <ModelOrFallback url={ASSETS.hoop} scale={2.2} position={[0, 2.7, -5.4]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.lockers} scale={2.0} position={[-2.7, 1.0, -6.2]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.lockers} scale={2.0} position={[2.7, 1.0, -6.2]} rotation={[0, 0, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.bench} scale={2.1} position={[-3.05, 0.46, -2.7]} rotation={[0, 0.5, 0]} castShadow fallback={null} />
-        <ModelOrFallback url={ASSETS.ballrack} scale={1.8} position={[3.05, 0.95, -2.9]} rotation={[0, -0.5, 0]} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.lockers} scale={2.0} position={[-2.7, 0, -6.2]} rotation={[0, LOCKER_YAW, 0]} seatScaled envMapIntensity={1.4} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.lockers} scale={2.0} position={[2.7, 0, -6.2]} rotation={[0, LOCKER_YAW, 0]} seatScaled envMapIntensity={1.4} castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.bench} scale={2.1} position={[-3.05, 0, -2.7]} rotation={[0, 0.5, 0]} seatScaled castShadow fallback={null} />
+        <ModelOrFallback url={ASSETS.ballrack} scale={1.8} position={[3.05, 0, -2.9]} rotation={[0, -0.5, 0]} seatScaled castShadow fallback={null} />
       </Suspense>
     </group>
   )
@@ -363,6 +370,10 @@ function Scene({
           = real FPS. ONE warm front fill (offset left to also lift the darker olive pair). The props
           now read from the baked env IBL alone (the dark room is the point — no dedicated fill). */}
       <pointLight position={[-0.5, 0.75, 1.9]} intensity={15} color="#FFE7CC" distance={6} decay={2} />
+      {/* A cool fill in front of EACH locker so its door/lock face reads (the user wants them
+          visible + facing front). Short range so it lights the locker, not the whole back wall. */}
+      <pointLight position={[-2.7, 1.5, -5.5]} intensity={18} color="#C6D2EC" distance={4.2} decay={2} />
+      <pointLight position={[2.7, 1.5, -5.5]} intensity={18} color="#C6D2EC" distance={4.2} decay={2} />
 
       <TrainingStudio />
 
@@ -388,6 +399,7 @@ function Scene({
           <meshBasicMaterial color="#39FF88" />
         </mesh>
       )}
+      {DEBUG_COLLIDERS && PROP_COLLIDERS.map((c, i) => <box3Helper key={i} args={[c.box, 0x39ff88]} />)}
 
       {/* No post-composer: the Canvas is NOT `flat`, so R3F applies ACES tonemap + MSAA
           natively (correct color + clean edges) without a per-frame full-screen pass. */}
