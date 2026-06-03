@@ -123,8 +123,17 @@ function LoadedModel({
     return clone
   }, [gltf.scene, normalizeTo, seat, seatScaled, scale, castShadow, material, envMapIntensity, emissive, emissiveIntensity])
 
-  // When seatScaled baked the scale into the clone, don't re-apply it on the primitive.
-  return <primitive object={object} scale={seatScaled ? undefined : scale} position={position} rotation={rotation} />
+  // seatScaled baked the scale + the floor-seat LIFT into the clone (clone.position.y). Apply the
+  // prop's position/rotation via a WRAPPER GROUP — if we set them on the <primitive> directly,
+  // R3F would overwrite clone.position and wipe the lift, sinking the prop under the floor.
+  if (seatScaled) {
+    return (
+      <group position={position} rotation={rotation}>
+        <primitive object={object} />
+      </group>
+    )
+  }
+  return <primitive object={object} scale={scale} position={position} rotation={rotation} />
 }
 
 interface ModelOrFallbackProps extends LoadedModelProps {
