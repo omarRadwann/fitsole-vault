@@ -41,6 +41,10 @@ const R = 0.17 // ball radius — MUST match the visual normalizeTo (0.34 → ra
 // bright performance ring (its glow washed the lower half → a sunken "dome") and level with the
 // sneakers that occluded it. Lifting it clear of the ring + floor reads as ON the stage, not under it.
 const BALL_FLOAT = 0.32
+// HOME — once settled, the ball gently drifts back here (front-right of the pairs, clearly in view +
+// reachable) so it can NEVER be stranded far away where it's too small/distant to grab. A slow magnetic
+// return, not a snap. x,z only (y is the float). Behind the pairs' z so they still render in front.
+const HOME = new THREE.Vector3(1.05, BALL_FLOAT, -0.7)
 const SPAWN = new THREE.Vector3(1.0, 2.5, -1.0) // mid-scene + high → drops INTO VIEW + bounces hard on enter (kept back so it doesn't loom near the camera)
 const GRAV = -10
 const REST = 0.78 // floor restitution — lively but settles in a few bounces (0.84 felt pinball-y/endless)
@@ -352,6 +356,10 @@ export default function Basketball({
       // (onPointerDown / meet-kick), so the moment you touch it, gravity + bounce physics resume.
       const floatY = reduced ? BALL_FLOAT : BALL_FLOAT + Math.sin(state.clock.elapsedTime * 1.1) * 0.014
       S.pos.y += (floatY - S.pos.y) * Math.min(1, 5 * dt)
+      // Magnetic HOME drift (x,z) — a settled ball eases back to a reachable spot so it's never stranded
+      // far away. Slow (rate 1.3 → ~2-3 s) so it reads as an intentional return to its display pose.
+      S.pos.x += (HOME.x - S.pos.x) * Math.min(1, 1.3 * dt)
+      S.pos.z += (HOME.z - S.pos.z) * Math.min(1, 1.3 * dt)
     }
 
     // squash recovers toward round

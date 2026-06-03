@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer, useGLTF } from '@react-three/drei'
-import { EffectComposer, Bloom } from '@react-three/postprocessing'
+import { EffectComposer, Bloom, HueSaturation } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
@@ -147,8 +147,8 @@ function Pair({
       </group>
       {/* Soft drop shadow under the pair — a cheap textured blob. As a child of the OUTER group it
           follows the walk-in x + the spin automatically, and stays on the floor while the bob floats. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} scale={[0.26, 0.13, 1]} renderOrder={2}>
-        <circleGeometry args={[1, 24]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} scale={[0.42, 0.24, 1]} renderOrder={2}>
+        <circleGeometry args={[1, 32]} />
         <meshBasicMaterial map={blobTexture()} transparent opacity={0.5} depthWrite={false} />
       </mesh>
     </group>
@@ -370,8 +370,10 @@ function Scene({
     const floatL = reduced ? 0 : Math.sin(t * 1.1) * 0.016 * present
     const floatR = reduced ? 0 : Math.sin(t * 1.1 + 1.7) * 0.016 * present
 
-    const lx = lerp(-4.5, -0.34, we)
-    const rx = lerp(4.5, 0.34, we)
+    // Meet X — close enough to read as "the two drops meet", but ≥ the spinning pairs' footprint
+    // diameter (~1.08) apart so they NEVER overlap/touch at any spin angle (was 0.34 → heavy overlap).
+    const lx = lerp(-4.5, -0.62, we)
+    const rx = lerp(4.5, 0.62, we)
     // The pairs HOVER above the ring (a premium floating-product display): fully visible —
     // nothing hidden by the floor/ring — with a soft contact shadow cast below to ground the
     // levitation. LIFE during the spin: a bob synced to the spin phase, a slight X tumble, a
@@ -476,7 +478,7 @@ function Scene({
       <spotLight ref={key2Ref} position={[-2.1, 3.8, 1.0]} target={spotTarget} angle={0.46} penumbra={0.92} intensity={22} distance={15} decay={2} color="#E6EEFF" />
       {/* Cool rim from behind-above — separates the dark pairs from the dark studio. Boosted
           so the shoe silhouettes get a crisp premium edge-glow (esp. the darker olive runner). */}
-      <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={48} distance={9} decay={2} color="#B4C6F4" />
+      <spotLight position={[0, 3.1, -2.6]} target={spotTarget} angle={0.62} penumbra={1} intensity={58} distance={9} decay={2} color="#AEC2F6" />
       {/* LEAN cinematic light set — every light shades every fragment, so on the iGPU fewer lights
           = real FPS. ONE warm front fill (offset left to also lift the darker olive pair). The props
           now read from the baked env IBL alone (the dark room is the point — no dedicated fill). */}
@@ -528,8 +530,11 @@ function Scene({
           meet sparks); real bloom is what makes them GLOW + ignite instead of just clamping to white.
           Conservative + mipmapBlur (efficient mip chain) so a glowing scene this simple stays cheap;
           luminanceThreshold isolates the bright emissives so the dark studio doesn't wash out. */}
-      <EffectComposer multisampling={4}>
-        <Bloom intensity={0.7} luminanceThreshold={0.7} luminanceSmoothing={0.22} mipmapBlur radius={0.78} />
+      <EffectComposer multisampling={2}>
+        <Bloom intensity={0.72} luminanceThreshold={0.7} luminanceSmoothing={0.22} mipmapBlur radius={0.8} />
+        {/* Subtle grade — a touch more saturation for richer, more premium colour. Merges into the
+            final effect pass (no extra render target), so it's essentially free on top of bloom. */}
+        <HueSaturation saturation={0.12} />
       </EffectComposer>
     </>
   )
