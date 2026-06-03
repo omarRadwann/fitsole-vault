@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Environment, Lightformer, useGLTF } from '@react-three/drei'
-import { EffectComposer, Bloom, HueSaturation } from '@react-three/postprocessing'
+import { EffectComposer, Bloom, HueSaturation, SMAA } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import ModelOrFallback from '@/components/three/ModelOrFallback'
 import { ASSETS } from '@/lib/assets'
@@ -38,7 +38,7 @@ const ringMat = new THREE.MeshStandardMaterial({ color: '#FFE4AE', emissive: '#F
 // Cool-white LED — sporty accent strips (the athletic contrast to the warm gold).
 const ledCoolMat = new THREE.MeshStandardMaterial({ color: '#EAF1FF', emissive: '#BFD4FF', emissiveIntensity: 1.8, roughness: 1, metalness: 0 })
 // Warm lit floor-pool inside the performance ring (a soft glow under the pairs).
-const poolMat = new THREE.MeshStandardMaterial({ color: '#17160F', emissive: '#7A5A28', emissiveIntensity: 0.7, roughness: 0.5, metalness: 0.2 })
+const poolMat = new THREE.MeshStandardMaterial({ color: '#17160F', emissive: '#6E5024', emissiveIntensity: 0.5, roughness: 0.5, metalness: 0.2 })
 
 // Soft round glow sprite for the in-scene atmosphere (embers) + the meet sparks. White core → warm
 // falloff → transparent, so additive-blended points read as glowing motes, not hard dots. Built once.
@@ -398,7 +398,7 @@ function Scene({
     // is boosted extra so the darker olive runner reads as premium as the brighter teal pair.
     if (keyRef.current) keyRef.current.intensity = 44 + glow * 32
     if (key2Ref.current) key2Ref.current.intensity = 36 + glow * 26
-    ringMat.emissiveIntensity = 1.9 + glow * 4.8 + burst * 11 // ignite HARDER at the meet (the wow flash)
+    ringMat.emissiveIntensity = 1.2 + glow * 4.6 + burst * 8 // calm base glow → FLARES at the meet, then settles back down (the end was staying too bright)
     // Gold SHOCKWAVE — a flat ring bursts outward across the floor at the meet. Pure function of
     // p (deterministic → replays cleanly on scroll back/forth); near-zero cost (1 draw, ~6% of scroll).
     if (shockRef.current) {
@@ -530,11 +530,14 @@ function Scene({
           meet sparks); real bloom is what makes them GLOW + ignite instead of just clamping to white.
           Conservative + mipmapBlur (efficient mip chain) so a glowing scene this simple stays cheap;
           luminanceThreshold isolates the bright emissives so the dark studio doesn't wash out. */}
-      <EffectComposer multisampling={2}>
-        <Bloom intensity={0.72} luminanceThreshold={0.7} luminanceSmoothing={0.22} mipmapBlur radius={0.8} />
+      <EffectComposer multisampling={0}>
+        <Bloom intensity={0.58} luminanceThreshold={0.72} luminanceSmoothing={0.22} mipmapBlur radius={0.8} />
         {/* Subtle grade — a touch more saturation for richer, more premium colour. Merges into the
             final effect pass (no extra render target), so it's essentially free on top of bloom. */}
-        <HueSaturation saturation={0.12} />
+        <HueSaturation saturation={0.08} />
+        {/* SMAA — cheap post-process anti-aliasing instead of MSAA on the composer's render target
+            (multisampling=0). Keeps the sneaker edges clean at a fraction of MSAA's bandwidth cost. */}
+        <SMAA />
       </EffectComposer>
     </>
   )
