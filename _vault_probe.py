@@ -11,6 +11,9 @@ with sync_playwright() as pw:
         "--ignore-gpu-blocklist", "--window-size=1600,950",
     ])
     pg = b.new_page(viewport={"width": 1600, "height": 900}, device_scale_factor=1)
+    errs = []
+    pg.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
+    pg.on("pageerror", lambda e: errs.append(f"PAGEERROR {e}"))
     cdp = pg.context.new_cdp_session(pg)
 
     def shot(name):
@@ -22,8 +25,9 @@ with sync_playwright() as pw:
     pg.wait_for_timeout(3500)
     total = pg.evaluate("()=>document.body.scrollHeight")
     print("scrollHeight:", total)
-    for frac, name in [(0.0, "vault_top"), (0.06, "vault_hero"), (0.12, "vault_p12")]:
+    for frac, name in [(0.28, "vault_c28"), (0.40, "vault_c40"), (0.52, "vault_c52")]:
         pg.evaluate(f"window.scrollTo(0,{int(frac*total)})")
         pg.wait_for_timeout(1800)
         shot(name)
+    print("CONSOLE ERRORS:", errs[:8] if errs else "clean")
     b.close()

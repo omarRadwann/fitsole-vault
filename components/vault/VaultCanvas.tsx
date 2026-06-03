@@ -1,7 +1,7 @@
 'use client'
 
 import { Canvas } from '@react-three/fiber'
-import { PerformanceMonitor, Stats } from '@react-three/drei'
+import { PerformanceMonitor, Stats, Preload } from '@react-three/drei'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import VaultScene from './VaultScene'
 import {
@@ -159,6 +159,12 @@ export default function VaultCanvas({ scrollProgress, active, reduced }: VaultCa
         {debug && <DebugStats sink={sink} />}
         <Suspense fallback={<LoadingFallback />}>
           <VaultScene scrollProgress={scrollProgress} active={active} tier={tier} reduced={reduced} integrated={integrated} />
+          {/* Pre-compile every material's shader program + upload every texture at MOUNT (behind the
+              loading screen) instead of lazily on first render. Without this, the brand-corridor totems
+              + logo textures (and other deep-scroll geometry) compile/upload the first time they enter
+              frame → a one-off frame hitch mid-scroll (the FPS dip into the corridor). Preload moves
+              that cost to load time, where a wait is expected. */}
+          <Preload all />
         </Suspense>
       </Canvas>
       {debug && (
