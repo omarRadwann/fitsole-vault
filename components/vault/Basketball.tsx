@@ -240,11 +240,11 @@ export default function Basketball({
     if (S.scoreCooldown > 0) S.scoreCooldown -= dt
 
     if (S.drag.active) {
-      // DRAG — project the pointer onto a camera-facing plane anchored at the ball's depth WHEN the
-      // grab began (not the lagging ball → no smoothing feedback). SMOOTH the rendered position
-      // toward the cursor; sample the RAW target so the throw stays crisp (smooth visual, snappy flick).
-      state.camera.getWorldDirection(S.camFwd)
-      if (!S.dragAnchored) { S.dragAnchor.copy(S.pos); S.dragAnchored = true }
+      // DRAG — project the pointer onto a plane anchored at the ball's depth + the camera's facing
+      // WHEN the grab began. Both the anchor AND the normal are frozen at grab: the camera's subtle
+      // breath (and any orbit) must NOT wobble the plane mid-drag, or it jitters the sampled throw
+      // velocity (a flick could misfire). SMOOTH the rendered pos; sample the RAW target → crisp flick.
+      if (!S.dragAnchored) { S.dragAnchor.copy(S.pos); state.camera.getWorldDirection(S.camFwd); S.dragAnchored = true }
       S.plane.setFromNormalAndCoplanarPoint(S.camFwd, S.dragAnchor)
       state.raycaster.setFromCamera(state.pointer, state.camera)
       if (state.raycaster.ray.intersectPlane(S.plane, S.hit)) {
