@@ -52,5 +52,6 @@ next-env.d.ts
 # scratch: AI video generation candidates (not part of the app/deploy)
 /.vidcand/
 
-# dev-only self-verification screenshots (scripts/_shot.mjs output)
+# dev-only self-verification screenshots (scripts/_shot.mjs / _shot_verify.mjs output)
 /.shots/
+/.shots-verify/

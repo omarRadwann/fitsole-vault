@@ -615,6 +615,7 @@ function Scene({
 export default function SkyScene({
   scrollProgress,
   active,
+  warm = false,
   reduced,
   invalidateRef,
   ballControlRef,
@@ -622,6 +623,10 @@ export default function SkyScene({
 }: {
   scrollProgress: React.MutableRefObject<number>
   active: boolean
+  // The finale is APPROACHING (one viewport out). Triggers a one-time warm-up render burst so
+  // the env bakes + the GLBs upload + the shaders compile behind the black entrance overlay,
+  // so the loop is already warm when `active` turns on (no cold first-frame hitch on scroll-in).
+  warm?: boolean
   reduced: boolean
   invalidateRef: React.MutableRefObject<(() => void) | null>
   ballControlRef?: React.MutableRefObject<BallControl | null>
@@ -629,13 +634,28 @@ export default function SkyScene({
 }) {
   // Assume integrated (shadows off) until a discrete GPU is confirmed in onCreated.
   const [reflective, setReflective] = useState(false)
+  // One-time warm-up burst (see `warm`): spin the loop briefly while approaching-but-not-yet-
+  // on-screen, then park. After it, the canvas holds its last frame at frameloop="never" (zero
+  // GPU) until `active`. Fires once per mount so re-scrolling the seam doesn't re-burst.
+  const [warming, setWarming] = useState(false)
+  const warmedRef = useRef(false)
+  useEffect(() => {
+    if (!warm || active || warmedRef.current) return
+    warmedRef.current = true
+    setWarming(true)
+    const t = setTimeout(() => setWarming(false), 650)
+    return () => clearTimeout(t)
+  }, [warm, active])
   return (
     <Canvas
       // Real-time shadows only on DISCRETE GPUs (reflective === !integrated). On the iGPU
       // the always-render finale + the floor reflection is enough; a shadow map on top is
       // real cost for little gain — the pairs stay grounded by their floor reflection.
       shadows={reflective ? 'percentage' : false}
-      frameloop={active ? 'always' : 'never'}
+      // "always" while the finale is the on-screen subject (active) or during the one-time warm
+      // burst; "never" otherwise — so it never co-renders with the vault membership beat above
+      // or the unboxing video below.
+      frameloop={active || warming ? 'always' : 'never'}
       dpr={1}
       camera={{ position: [0, 0.5, 4.0], fov: 40, near: 0.1, far: 40 }}
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
@@ -665,6 +685,6 @@ useGLTF.preload(ASSETS.hoop)
 useGLTF.preload(ASSETS.lockers)
 useGLTF.preload(ASSETS.ballrack)
 useGLTF.preload(ASSETS.bench)
-useGLTF.preload(ASSETS.gymbag)
-useGLTF.preload(ASSETS.kettlebell)
+// (gymbag + kettlebell preloads removed — TrainingStudio no longer renders them, so fetching +
+// decoding + GPU-uploading those GLBs on first load was pure waste.)
 useGLTF.preload(ASSETS.basketball)

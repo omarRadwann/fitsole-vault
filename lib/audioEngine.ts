@@ -25,6 +25,7 @@ class AudioEngine {
   private analyser: AnalyserNode | null = null // taps the master mix
   private freqData: Uint8Array<ArrayBuffer> | null = null
   private level = 0 // smoothed reactive energy
+  private lastLevelT = -1 // last getLevel() compute time (ms) — caches within a frame
   private bedStarted = false
   private bedActive = false
   // The ambient music BED is a STANDALONE <audio> element (NOT routed through the
@@ -121,6 +122,12 @@ class AudioEngine {
     const a = this.analyser
     const data = this.freqData
     if (!a || !data) return 0
+    // Same-frame cache: VaultScene AND HeroDisplay both tap getLevel() each frame; a 4ms guard
+    // (well under one frame, even at 200fps) means the FFT read + bin sum runs ONCE per frame and
+    // the second consumer reuses it — no behaviour change, one fewer typed-array copy per frame.
+    const now = typeof performance !== 'undefined' ? performance.now() : 0
+    if (now - this.lastLevelT < 4) return this.level
+    this.lastLevelT = now
     a.getByteFrequencyData(data)
     let sum = 0
     const n = 16 // low / low-mid bins carry the beat

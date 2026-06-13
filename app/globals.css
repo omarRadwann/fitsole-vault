@@ -199,6 +199,21 @@ html.lenis body {
   );
 }
 
+/* Lighter scrim variant for beats whose camera frames a DARK, off-centre subject
+   (the drop-wall "New Drops" beat glances left at the screen, leaving frame-centre
+   dark corridor). The default scrim's 74%-black centre over that already-empty
+   centre read as a black void. This keeps just enough backing for the centred copy
+   (the rest of legibility comes from .vault-copy's text-shadow) without punching a
+   hole in the frame. Two-class selector → wins over .vault-scrim regardless of order. */
+.vault-scrim.vault-scrim--soft {
+  background: radial-gradient(
+    ellipse 72% 62% at 50% 52%,
+    rgba(8, 7, 6, 0.34) 0%,
+    rgba(8, 7, 6, 0.16) 52%,
+    transparent 80%
+  );
+}
+
 .vault-copy {
   position: relative;
   text-shadow:

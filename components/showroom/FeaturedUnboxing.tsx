@@ -35,7 +35,10 @@ export default function FeaturedUnboxing() {
           video?.pause()
         }
       },
-      { threshold: 0.2 }
+      // 0.45 (was 0.2): only start decoding once the section is clearly the focus. Combined with
+      // the finale canvas now parking before this section (SkyBridge render gate), this keeps the
+      // H.264 decode from starting while the finale is still painting above → no video stutter.
+      { threshold: 0.45 }
     )
     io.observe(section)
     return () => io.disconnect()

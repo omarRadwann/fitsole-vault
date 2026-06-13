@@ -144,6 +144,12 @@ export default function VaultExperience() {
   const [vaultVisible, setVaultVisible] = useState(true)
   const vaultVisibleRef = useRef(true)
   const motionProgRef = useRef(0)
+  // True while the finale ("The Meeting") canvas is actively rendering (SkyBridge dispatches
+  // `fitsole:finale-active`). The vault FORCE-PARKS its own render loop whenever this is set, so
+  // the two heavy WebGL canvases never run at once (the membership-beat lag). The finale only
+  // turns this on once it has taken over under the black bridge, so the (by-then off-screen,
+  // scrim-covered, scroll-clamped-at-end) vault freezing here is invisible.
+  const finaleActiveRef = useRef(false)
 
   // Serve the lightweight static hero ONLY to true phones (small screen + touch).
   // Coarse-pointer gating keeps iPads AND laptops on the rich 3D walk.
@@ -172,6 +178,22 @@ export default function VaultExperience() {
       mqReduce.removeEventListener('change', update)
       mqMobile.removeEventListener('change', update)
     }
+  }, [])
+
+  // Mutual exclusion with the finale: when "The Meeting" canvas starts rendering, park the
+  // vault loop (and keep it parked — the per-frame tick also reads finaleActiveRef, so it can't
+  // immediately un-park while the finale is live). Listener is mount-stable (mutates a ref).
+  useEffect(() => {
+    const onFinaleActive = (e: Event) => {
+      const on = !!(e as CustomEvent).detail
+      finaleActiveRef.current = on
+      if (on && vaultVisibleRef.current) {
+        vaultVisibleRef.current = false
+        setVaultVisible(false)
+      }
+    }
+    window.addEventListener('fitsole:finale-active', onFinaleActive as EventListener)
+    return () => window.removeEventListener('fitsole:finale-active', onFinaleActive as EventListener)
   }, [])
 
   // Ambient bed: report the vault as a "bed section" (audible while the WebGL vault
@@ -272,7 +294,9 @@ export default function VaultExperience() {
       // re-entry. The rect we already have makes this free; only flip React state on
       // a boundary cross. (Hidden tabs are handled by the browser throttling rAF.)
       const vh = window.innerHeight
-      const onScreen = rect.bottom > -vh * 0.3 && rect.top < vh * 2
+      // While the finale is rendering, the vault stays parked regardless of its own rect (so the
+      // tick can't fight the force-park) — the two heavy canvases never co-render.
+      const onScreen = !finaleActiveRef.current && rect.bottom > -vh * 0.3 && rect.top < vh * 2
       if (onScreen !== vaultVisibleRef.current) {
         vaultVisibleRef.current = onScreen
         setVaultVisible(onScreen)

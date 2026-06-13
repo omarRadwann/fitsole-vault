@@ -73,15 +73,25 @@ export default function SkyBridge() {
   const damped = useRef(-1)
   const lastT = useRef(0)
 
-  const [inView, setInView] = useState(false)
+  // `warm` = the finale is APPROACHING (mount-adjacent — the scene runs a one-time warm-up
+  // render burst so it bakes its env + uploads its GLBs + compiles shaders behind the black
+  // entrance overlay, and the music bed leads in). `render` = the finale is the ON-SCREEN
+  // subject (drives the frameloop + the scroll-driven pose). Splitting them stops the heavy
+  // canvas from rendering a full viewport EARLY (on top of the vault's membership beat → the
+  // image-3 lag) or a full viewport LATE (on top of the unboxing <video> below → the image-4
+  // video lag). `render` is computed from scroll-p in the driver below, not from a wide IO.
+  const [warm, setWarm] = useState(false)
+  const [render, setRender] = useState(false)
+  const renderRef = useRef(false)
   const [reduced, setReduced] = useState(false)
   const [mobile, setMobile] = useState(false)
   // Keep the ambient MUSIC BED playing through the finale (not just the vault). The
   // shared registry ORs this with the vault + video sections, so the same track that
   // plays in the vault carries straight into "The Meeting" — no separate cue. (The
   // old synth `ney`/`chime` cues were removed: they sounded cheap AND ducked the bed
-  // −6 dB, so you heard the awful placeholder instead of the music.)
-  useBedSection(!mobile && inView)
+  // −6 dB, so you heard the awful placeholder instead of the music.) Driven by `warm`
+  // (a touch wider than the render window) so the music leads in/out around the scene.
+  useBedSection(!mobile && warm)
   const rafId = useRef(0)
   const offset = useRef(0)
   const span = useRef(1)
@@ -127,13 +137,14 @@ export default function SkyBridge() {
   useEffect(() => {
     const el = sectionRef.current
     if (!el) return
-    // WARM-UP observer — activate the canvas ~one viewport EARLY (rootMargin), so the scene
-    // mounts, bakes its env, uploads the (preloaded) models + renders its first frames while
-    // still hidden behind the black entrance overlay. Scrolling in then reveals an already-warm,
-    // smooth scene instead of a decode/first-frame hitch (the "laggy entrance").
-    const warm = new IntersectionObserver(
+    // WARM-UP observer — flips `warm` ~0.9 viewport EARLY so the scene mounts + runs its one-time
+    // warm-up render burst (env bake + GLB upload + shader compile) while still hidden behind the
+    // black entrance overlay, and the music bed leads in. It does NOT drive the render loop — the
+    // tight `render` gate (computed from scroll-p in the driver below) does, so the heavy loop no
+    // longer over-extends a full viewport onto the vault's membership beat or the unboxing video.
+    const warmObs = new IntersectionObserver(
       ([e]) => {
-        setInView(e.isIntersecting)
+        setWarm(e.isIntersecting)
         if (e.isIntersecting) {
           // Fresh drop + hard bounce on (re)entry after a real gap, so the ball "lands" again.
           if (performance.now() - leftAt.current > 2000) ballControlRef.current?.requestReset()
@@ -142,7 +153,7 @@ export default function SkyBridge() {
           ballControlRef.current?.releaseDrag() // never leave a drag captured while parked
         }
       },
-      { threshold: 0, rootMargin: '100% 0px 100% 0px' }
+      { threshold: 0, rootMargin: '90% 0px 90% 0px' }
     )
     // HEADER observer — fade the store header to full-bleed the cinematic frame ONLY when the
     // finale is actually on screen (kept on real intersection so the header doesn't vanish early).
@@ -150,19 +161,21 @@ export default function SkyBridge() {
       ([e]) => window.dispatchEvent(new CustomEvent('fitsole:finale', { detail: e.isIntersecting })),
       { threshold: 0 }
     )
-    warm.observe(el)
+    warmObs.observe(el)
     head.observe(el)
     return () => {
-      warm.disconnect()
+      warmObs.disconnect()
       head.disconnect()
       window.dispatchEvent(new CustomEvent('fitsole:finale', { detail: false }))
     }
   }, [])
 
   // Scroll driver — writes scrollProgress (the 3D scene reads it) + the DOM overlay
-  // (soft ring at the meeting, copy fade, warm flood, resolve-to-black). In view only.
+  // (soft ring at the meeting, copy fade, warm flood, resolve-to-black) AND computes the
+  // tight `render` gate. Runs while `warm` (the finale neighbourhood) so the overlays + pose
+  // stay correct through the warm-up; the frameloop itself only spins while `render` is true.
   useEffect(() => {
-    if (!inView) return
+    if (!warm) return
     lastRenderedP.current = -1 // force a render on (re)entry
     damped.current = -1 // re-seed the damped scroll (no intro sweep on re-entry)
     lastT.current = performance.now()
@@ -185,8 +198,19 @@ export default function SkyBridge() {
       }
       const p = damped.current
       scrollProgress.current = p
-      // Demand-render the 3D scene only when scroll moved (else it holds the last
-      // frame at zero GPU cost). This + dpr=1 + few lights is the lag fix.
+      // RENDER GATE — spin the frameloop ONLY while the finale frame is the on-screen subject:
+      // from the moment its top enters the viewport (≈vault p1.0, so it never co-renders the
+      // vault membership beat above) until it has dived to near-black (p≥0.98; resolveRef is
+      // ~88% opaque by then, so freezing the last frame under the darkening overlay is invisible)
+      // — which parks it BEFORE the FeaturedUnboxing <video> below decodes. setState only on a
+      // boundary cross (no per-frame React churn). The warm-up burst keeps re-entry smooth.
+      const shouldRender = window.scrollY + window.innerHeight > offset.current && p < 0.98
+      if (shouldRender !== renderRef.current) {
+        renderRef.current = shouldRender
+        setRender(shouldRender)
+      }
+      // Demand-render hook kept for API symmetry (the canvas runs frameloop="always" while
+      // rendering, so this is a no-op there); harmless.
       if (Math.abs(p - lastRenderedP.current) > 0.0004) {
         lastRenderedP.current = p
         invalidateRef.current?.()
@@ -221,8 +245,28 @@ export default function SkyBridge() {
     return () => {
       running = false
       cancelAnimationFrame(rafId.current)
+      // Leaving the finale neighbourhood → park the render loop (belt-and-braces; the gate
+      // above usually parks it first via p≥0.98 / scroll-out).
+      if (renderRef.current) {
+        renderRef.current = false
+        setRender(false)
+      }
     }
-  }, [inView, reduced])
+  }, [warm, reduced])
+
+  // Tell the vault to PARK its own render loop while the finale is actively rendering, so the
+  // two heavy WebGL canvases never run at once (the membership-beat lag). The finale only
+  // renders once it has taken over under the black bridge, so the (by-then off-screen,
+  // scrim-covered) vault freezing here is invisible. Mirrors the existing fitsole:finale channel.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('fitsole:finale-active', { detail: render }))
+  }, [render])
+  useEffect(
+    () => () => {
+      window.dispatchEvent(new CustomEvent('fitsole:finale-active', { detail: false }))
+    },
+    []
+  )
 
   return (
     <section ref={sectionRef} aria-label="FitSole — two drops, one vault" className="relative h-[240vh] w-full">
@@ -232,7 +276,7 @@ export default function SkyBridge() {
           <Image src="/images/scene-cloud.webp" alt="ON Cloudmonster" fill priority sizes="100vw" className="object-cover opacity-90" />
         ) : (
           <div className="absolute inset-0">
-            <SkyScene scrollProgress={scrollProgress} active={inView} reduced={reduced} invalidateRef={invalidateRef} ballControlRef={ballControlRef} onScore={onScore} />
+            <SkyScene scrollProgress={scrollProgress} active={render} warm={warm} reduced={reduced} invalidateRef={invalidateRef} ballControlRef={ballControlRef} onScore={onScore} />
           </div>
         )}
 
@@ -257,7 +301,7 @@ export default function SkyBridge() {
         {/* Floating gold dust in the light beam — depth + atmosphere. Pure CSS
             transform/opacity drift (compositor-only, no blur, no main-thread cost);
             mounted only while in view and motion is allowed. */}
-        {inView && !reduced && (
+        {render && !reduced && (
           <div aria-hidden className="absolute inset-0 pointer-events-none overflow-hidden z-[4]">
             {MOTES.map((m, i) => (
               <span

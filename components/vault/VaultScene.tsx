@@ -44,10 +44,14 @@ const LOOK_PATH = new THREE.CatmullRomCurve3([
 ])
 
 // Materials
-const wallMat = new THREE.MeshStandardMaterial({
+// Matte near-black walls/ceiling — Lambert (per-fragment diffuse, NO PBR BRDF / env / specular
+// sample) instead of Standard. These four planes (left/right/back wall + ceiling) fill most of
+// the frame at the entrance + exit and are pure matte (roughness 0.95 / metalness 0 → no
+// reflection to lose), so Lambert is visually identical but shades far cheaper per fragment —
+// the biggest invisible fill-rate win on the integrated GPU. (Same call SkyScene's
+// wallConcreteMat already makes for its dark walls.)
+const wallMat = new THREE.MeshLambertMaterial({
   color: '#0A0908',
-  roughness: 0.95,
-  metalness: 0.0,
 })
 const metalMat = new THREE.MeshStandardMaterial({
   color: '#2A2420',

@@ -13,6 +13,9 @@ interface Scene {
   from: number
   to: number
   content: React.ReactNode
+  // 'soft' → use the lighter .vault-scrim--soft (for beats whose camera frames a
+  // dark, off-centre subject, where the default centre scrim reads as a black void).
+  scrim?: 'soft'
 }
 
 const scenes: Scene[] = [
@@ -116,6 +119,9 @@ const scenes: Scene[] = [
     id: 'drop-wall',
     from: 0.50,
     to: 0.65,
+    // Soft scrim: this beat glances LEFT at the drop screen, so the frame centre is
+    // dark corridor — the default 74%-black centre scrim read as a void here.
+    scrim: 'soft',
     content: (
       <div className="flex flex-col items-center text-center gap-4">
         <p className="text-[10px] tracking-[0.4em] uppercase text-vault-gold/80">The Wall</p>
@@ -321,7 +327,7 @@ export default function VaultOverlay({
           className="vault-scene-section absolute inset-0 flex items-center justify-center px-6 opacity-0 pointer-events-none"
           style={{ willChange: 'opacity' }}
         >
-          <div className="vault-scrim" />
+          <div className={`vault-scrim${scene.scrim === 'soft' ? ' vault-scrim--soft' : ''}`} />
           <div className="pointer-events-auto vault-copy w-full" style={{ willChange: 'transform' }}>
             {scene.content}
           </div>
