@@ -1,2 +1,2 @@
-:HL["/fitsole-vault/_next/static/chunks/0pi94xyyic6mk.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"/_not-found","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"9r3nqGE9voCygFdFe6T6-"}
+:HL["/fitsole-vault/_next/static/chunks/0sa9~jk7mq3~3.css","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"/_not-found","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"euY43qQMeN8CyjdnSV5Vg"}
